@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+Import("env")
+Import("env_modules")
+
+env_tr_lib = env_modules.Clone()
+
+# Godot's own source files
+env_tr_lib.add_source_files(env.modules_sources, "*.cpp")
+env_tr_lib.add_source_files(env.modules_sources, "level_loader/*.cpp")

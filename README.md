@@ -1,0 +1,2 @@
+# Tomb Raider Library for Godot
+This Godot module provides functionality to load levels for the original classic Tomb Raider levels on the PC. Currently games 1-3 are supported. As it stands, it is basically a level and model viewer, but future versions may implement some gameplay support with Godot acting as the host engine.
