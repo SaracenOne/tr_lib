@@ -585,14 +585,46 @@ Node3D* create_movable_model(uint32_t p_type_info_id, TRMovableInfo p_movable_in
 					skeleton->set_bone_rest(i, Transform3D(Basis(), origin_offset));
 					skeleton->set_bone_pose_position(i, origin_offset);
 
-					reset_animation->add_track(Animation::TYPE_POSITION_3D);
-					reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
-					reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, origin_offset);
-					reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, origin_offset);
-					reset_animation->add_track(Animation::TYPE_ROTATION_3D);
-					reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
-					reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, Quaternion());
-					reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, Quaternion());
+					if (p_movable_info.anims.size()) {
+						TRAnimation tr_animation = p_movable_info.anims.get(0);
+						TRAnimFrame anim_frame = tr_animation.frames[0];
+						TRTransform bone_transform = anim_frame.transforms.get(i);
+
+						Vector3 frame_origin = Vector3(
+							bone_transform.pos.x * TR_TO_GODOT_SCALE,
+							bone_transform.pos.y * -TR_TO_GODOT_SCALE,
+							bone_transform.pos.z * -TR_TO_GODOT_SCALE);
+
+						float rot_y_deg = (float)(bone_transform.rot.y) / 16384.0f * -90.0f;
+						float rot_x_deg = (float)(bone_transform.rot.x) / 16384.0f * 90.0f;
+						float rot_z_deg = (float)(bone_transform.rot.z) / 16384.0f * -90.0f;
+
+						float rot_y_rad = Math::deg_to_rad(rot_y_deg);
+						float rot_x_rad = Math::deg_to_rad(rot_x_deg);
+						float rot_z_rad = Math::deg_to_rad(rot_z_deg);
+
+						Basis rotation_basis;
+						rotation_basis.rotate(Vector3(rot_x_rad, rot_y_rad, rot_z_rad), EulerOrder::YXZ);
+
+						reset_animation->add_track(Animation::TYPE_POSITION_3D);
+						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, origin_offset + frame_origin);
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, origin_offset + frame_origin);
+						reset_animation->add_track(Animation::TYPE_ROTATION_3D);
+						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, rotation_basis.get_quaternion());
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, rotation_basis.get_quaternion());
+					} else {
+						reset_animation->add_track(Animation::TYPE_POSITION_3D);
+						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
+
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, origin_offset);
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, origin_offset);
+						reset_animation->add_track(Animation::TYPE_ROTATION_3D);
+						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath("Skeleton:" + bone_name));
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 0.0, Quaternion());
+						reset_animation->track_insert_key(reset_animation->get_track_count() - 1, 1.0, Quaternion());
+					}
 
 					for (int anim_idx = 0; anim_idx < p_movable_info.anims.size(); anim_idx++) {
 						TRAnimation tr_animation = p_movable_info.anims.get(anim_idx);
