@@ -9,6 +9,7 @@
 #include <scene/resources/concave_polygon_shape_3d.h>
 #include <scene/resources/surface_tool.h>
 #include <scene/resources/primitive_meshes.h>
+#include <scene/resources/image_texture.h>
 #include <editor/editor_file_system.h>
 #include <core/io/stream_peer_gzip.h>
 
