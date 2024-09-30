@@ -58,11 +58,13 @@ struct TRRoomVertex {
 struct TRFaceTriangle {
 	int16_t indices[3];
 	int16_t tex_info_id;
+	int16_t effect_info;
 };
 
 struct TRFaceQuad {
 	int16_t indices[4];
 	int16_t tex_info_id;
+	int16_t effect_info;
 };
 
 struct TRRoomSprite {
@@ -95,10 +97,16 @@ struct TRRoomSector {
 
 struct TRRoomLight {
 	TRPos pos;
-	uint16_t intensity;
-	uint16_t intensity2;
+
+	TRColor3 color;
+
+	uint8_t light_type;
+
+	uint32_t intensity;
+	uint32_t intensity_alt;
+	
 	uint32_t fade;
-	uint32_t fade2;
+	uint32_t fade_alt;
 };
 
 struct TRRoomStaticMesh {
@@ -134,8 +142,8 @@ struct TRRoom {
 
 	Vector<TRRoomSector> sectors;
 
-	int16_t ambient_light;
-	int16_t ambient_light2;
+	Color ambient_light;
+	Color ambient_light_alt;
 	int16_t light_mode;
 
 	uint16_t light_count;
@@ -151,55 +159,6 @@ struct TRRoom {
 	uint8_t reverb_info;
 };
 
-struct TRAnimFrame {
-	Vector<TRTransform> transforms;
-};
-
-struct TRAnimation {
-	int32_t frame_ofs;
-	uint8_t frame_skip;
-	uint8_t frame_size;
-	int16_t current_anim_state;
-	int32_t speed;
-	int32_t acceleration;
-	int16_t frame_base;
-	int16_t frame_end;
-	int16_t jump_anim_num;
-	int16_t jump_frame_num;
-	int16_t number_changes;
-	int16_t change_index;
-	int16_t number_commands;
-	int16_t command_index;
-	Vector<TRAnimFrame> frames;
-};
-
-struct TRAnimationChange {
-	int16_t goal_anim_state;
-	int16_t number_ranges;
-	int16_t range_index;
-};
-
-struct TRAnimationRange {
-	int16_t start_frame;
-	int16_t end_frame;
-	int16_t link_anim_num;
-	int16_t link_frame_num;
-};
-
-struct TRAnimationCommand {
-	int16_t command;
-};
-
-struct TRMovableInfo {
-	int16_t mesh_count;
-	int16_t mesh_index;
-	int32_t bone_index;
-	int32_t frame_base;
-	int16_t anim_index;
-	int16_t anim_count;
-	Vector<TRAnimation> anims;
-};
-
 struct TRBoundingBox {
 	int16_t x_min;
 	int16_t x_max;
@@ -207,6 +166,58 @@ struct TRBoundingBox {
 	int16_t y_max;
 	int16_t z_min;
 	int16_t z_max;
+};
+
+struct TRAnimFrame {
+	Vector<TRTransform> transforms;
+	TRBoundingBox bounding_box;
+};
+
+struct TRAnimation {
+	int32_t frame_offset;
+	uint8_t frame_skip;
+	uint8_t frame_size;
+	int16_t current_animation_state;
+	int32_t velocity;
+	int32_t acceleration;
+	int32_t lateral_velocity;
+	int32_t lateral_acceleration;
+	int16_t frame_base;
+	int16_t frame_end;
+	int16_t next_animation_number;
+	int16_t next_frame_number;
+	int16_t number_state_changes;
+	int16_t state_change_index;
+	int16_t number_commands;
+	int16_t command_index;
+	Vector<TRAnimFrame> frames;
+};
+
+struct TRAnimationStateChange {
+	int16_t target_animation_state;
+	int16_t number_dispatches;
+	int16_t dispatch_index;
+};
+
+struct TRAnimationDispatch {
+	int16_t start_frame;
+	int16_t end_frame;
+	int16_t target_animation_number;
+	int16_t target_frame_number;
+};
+
+struct TRAnimationCommand {
+	int16_t command;
+};
+
+struct TRMoveableInfo {
+	int16_t mesh_count;
+	int16_t mesh_index;
+	int32_t bone_index;
+	int32_t frame_base;
+	int16_t animation_index;
+	int16_t animation_count;
+	Vector<TRAnimation> animations;
 };
 
 struct TRStaticInfo {
@@ -222,27 +233,33 @@ struct TRUV {
 };
 
 struct TRTextureInfo {
-	uint16_t drawtype;
+	uint16_t draw_type;
 	uint16_t texture_page;
+	uint16_t extra_flags;
 	TRUV uv[4];
+	uint32_t original_u;
+	uint32_t original_v;
+	uint32_t width;
+	uint32_t height;
 };
 
 struct tr_face4
 {
-	uint16_t verticies[4];
+	uint16_t vertices[4];
 	uint16_t texture;
 };
 
 struct TRMesh {
 	TRVertex center;
-	int32_t coll_radius;
+	int32_t collision_radius;
 
-	int16_t num_verts;
-	Vector<TRVertex> verticies;
+	int16_t vertex_count;
+	Vector<TRVertex> vertices;
 
-	int16_t num_normals;
+	int16_t normal_count;
 	// Normals if positive, colors if negative
 	Vector<TRVertex> normals;
+
 	Vector<int16_t> colors;
 
 	int16_t texture_quads_count;
@@ -262,9 +279,12 @@ struct TRTypes {
 	Vector<TRTextureInfo> texture_infos;
 	Vector<TRMesh> meshes;
 	Vector<TRAnimation> animations;
+	Vector<TRAnimationStateChange> animation_state_changes;
+	Vector<TRAnimationDispatch> animation_dispatches;
+	Vector<TRAnimationCommand> animation_commands;
 	PackedInt32Array mesh_tree_buffer;
 
-	HashMap<int, TRMovableInfo > movable_info_map;
+	HashMap<int, TRMoveableInfo > moveable_info_map;
 	HashMap<int, TRStaticInfo> static_info_map;
 };
 
@@ -322,6 +342,19 @@ struct TRCameraInfo {
 	Vector<TRGameVector> fixed;
 };
 
+struct TRFlybyCameraInfo {
+	TRPos position;
+	TRPos angles;
+	uint8_t sequence;
+	uint8_t index;
+	uint16_t fov;
+	int16_t roll;
+	uint16_t timer;
+	uint16_t speed;
+	uint16_t flags;
+	uint32_t room_id;
+};
+
 struct TRNavCell {
 	int32_t left;
 	int32_t right;
@@ -339,6 +372,7 @@ struct TREntity {
 	int16_t flags;
 	int16_t shade;
 	int16_t shade2;
+	int16_t ocb;
 };
 
 struct TRLevelData {

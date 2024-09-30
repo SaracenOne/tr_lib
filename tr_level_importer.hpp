@@ -67,7 +67,7 @@ public:
 		TRLevel *level = memnew(TRLevel);
 
 		level->set_level_path(p_source_file);
-		level->load_level();
+		level->load_level(false);
 
 		return FAILED;
 	}
