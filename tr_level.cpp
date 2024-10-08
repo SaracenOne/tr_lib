@@ -1,12 +1,16 @@
 #include "tr_level.hpp"
 
-#include <scene/3d/mesh_instance_3d.h>
+#include <scene/3d/audio_stream_player_3d.h>
 #include <scene/3d/bone_attachment_3d.h>
+#include <scene/3d/lightmap_gi.h>
+#include <scene/3d/mesh_instance_3d.h>
 #include <scene/3d/physics/collision_shape_3d.h>
 #include <scene/3d/physics/physics_body_3d.h>
 #include <scene/3d/physics/static_body_3d.h>
 #include <scene/animation/animation_player.h>
+#include <scene/resources/audio_stream_wav.h>
 #include <scene/resources/mesh_data_tool.h>
+#include <scene/resources/3d/box_shape_3d.h>
 #include <scene/resources/3d/concave_polygon_shape_3d.h>
 #include <scene/resources/3d/primitive_meshes.h>
 #include <scene/resources/surface_tool.h>
@@ -17,8 +21,6 @@
 #ifdef IS_MODULE
 using namespace godot;
 #endif
-#include <scene/3d/lightmap_gi.h>
-#include <scene/resources/3d/box_shape_3d.h>
 
 #define TR_TO_GODOT_SCALE 0.001 * 2.0
 #define TR_TEXTILE_SIZE 256
@@ -584,6 +586,15 @@ TRAnimationDispatch read_tr_animation_dispatch(Ref<TRFileAccess> p_file, TRLevel
 	return dispatch;
 }
 
+TRAnimationCommand read_tr_animation_command(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
+	TRAnimationCommand command;
+
+	command.command = p_file->get_s16();
+
+	return command;
+}
+
+
 TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRMesh tr_mesh;
 	tr_mesh.center = read_tr_vertex(p_file);
@@ -648,13 +659,24 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	return tr_mesh;
 }
 
-Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_moveable_info, PackedInt32Array p_mesh_tree_buffer, Vector<TRAnimation> p_animations, Vector<TRAnimationStateChange> p_state_changes, Vector<TRAnimationDispatch> p_dispatches, Vector<Ref<ArrayMesh>> p_meshes, TRLevelFormat p_level_format) {
+Node3D *create_godot_moveable_model(
+	uint32_t p_type_info_id,
+	TRMoveableInfo p_moveable_info,
+	TRTypes p_types,
+	Vector<Ref<ArrayMesh>> p_meshes,
+	Vector<Ref<AudioStream>> p_samples,
+	TRLevelFormat p_level_format,
+	bool p_use_unique_names) {
 	Node3D* new_type_info = memnew(Node3D);
 	new_type_info->set_name(get_type_info_name(p_type_info_id, p_level_format));
 
 	Vector<int> bone_stack;
 
 	int offset_bone_index = p_moveable_info.bone_index;
+
+	AudioStreamPlayer3D* audio_stream_player = nullptr;
+
+	Vector<TRPos> animation_position_offsets;
 
 	int current_parent = -1;
 	if (p_moveable_info.mesh_count > 0) {
@@ -664,7 +686,12 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 			
 			new_type_info->add_child(skeleton);
 			skeleton->set_display_folded(true);
-			skeleton->set_name("Skeleton");
+			if (p_use_unique_names) {
+				skeleton->set_name("GeneralSkeleton");
+				skeleton->set_unique_name_in_owner(true);
+			} else {
+				skeleton->set_name("Skeleton");
+			}
 
 			skeleton->add_bone("Root");
 			skeleton->set_bone_parent(0, current_parent);
@@ -779,7 +806,7 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 					godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
 				}
 
-				TRAnimation tr_next_animation = p_animations.get(tr_animation.next_animation_number);
+				TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number);
 				int next_frame_number = tr_animation.next_frame_number - tr_next_animation.frame_base;
 
 				// TODO: handle interpolation.
@@ -802,9 +829,9 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 
 				short state_change_index = tr_animation.state_change_index;
 				for (int state_change_offset_idx = 0; state_change_offset_idx < tr_animation.number_state_changes; state_change_offset_idx++) {
-					ERR_FAIL_INDEX_V(state_change_index + state_change_offset_idx, p_state_changes.size(), nullptr);
+					ERR_FAIL_INDEX_V(state_change_index + state_change_offset_idx, p_types.animation_state_changes.size(), nullptr);
 
-					TRAnimationStateChange state_change = p_state_changes.get(state_change_index + state_change_offset_idx);
+					TRAnimationStateChange state_change = p_types.animation_state_changes.get(state_change_index + state_change_offset_idx);
 
 					Dictionary state_change_dict;
 					short target_animation_state = state_change.target_animation_state;
@@ -813,11 +840,11 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 
 					Array dispatches;
 					for (int dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
-						ERR_FAIL_INDEX_V(dispatch_index + dispatch_offset_idx, p_dispatches.size(), nullptr);
-						TRAnimationDispatch dispatch = p_dispatches.get(dispatch_index + dispatch_offset_idx);
+						ERR_FAIL_INDEX_V(dispatch_index + dispatch_offset_idx, p_types.animation_dispatches.size(), nullptr);
+						TRAnimationDispatch dispatch = p_types.animation_dispatches.get(dispatch_index + dispatch_offset_idx);
 						if (dispatch.target_animation_number >= p_moveable_info.animation_index
 							&& dispatch.target_animation_number < p_moveable_info.animation_index + p_moveable_info.animation_count) {
-							TRAnimation new_tr_animation = p_animations.get(dispatch.target_animation_number);
+							TRAnimation new_tr_animation = p_types.animations.get(dispatch.target_animation_number);
 
 							Dictionary dispatch_dict;
 
@@ -842,14 +869,120 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 					animation_state_changes.append(state_change_dict);
 				}
 
+				int audio_stream_track_idx = -1;
+
+				Array command_list;
+				int command_offset = tr_animation.command_index;
+
+				TRPos position_offset;
+
+				for (int command_idx = 0; command_idx < tr_animation.number_commands; command_idx++) {
+					switch (p_types.animation_commands.get(command_offset++).command) {
+						case 1: {
+							// Set Position
+							position_offset.x = p_types.animation_commands.get(command_offset++).command;
+							position_offset.y = p_types.animation_commands.get(command_offset++).command;
+							position_offset.z = p_types.animation_commands.get(command_offset++).command;
+
+							Dictionary dict;
+							dict.set("command_name", "set_position");
+							dict.set("x", position_offset.x);
+							dict.set("y", position_offset.y);
+							dict.set("z", position_offset.z);
+
+							command_list.push_back(dict);
+							break;
+						}
+						case 2: {
+							// Set Jump Velocity
+							int16_t vertical_velocity = p_types.animation_commands.get(command_offset++).command;
+							int16_t horizontal_velocity = p_types.animation_commands.get(command_offset++).command;
+
+							Dictionary dict;
+							dict.set("command_name", "set_jump_velocity");
+							dict.set("vertical_velocity", vertical_velocity);
+							dict.set("horizontal_velocity", horizontal_velocity);
+
+							command_list.push_back(dict);
+							break;
+						}
+						case 3: {
+							// Free hands
+							Dictionary dict;
+							dict.set("command_name", "free_hands");
+
+							command_list.push_back(dict);
+							break;
+						}
+						case 4: {
+							// Kill
+							Dictionary dict;
+							dict.set("command_name", "kill");
+
+							command_list.push_back(dict);
+							break;
+						}
+						case 5: {
+							// Play SFX
+							if (!audio_stream_player) {
+								audio_stream_player = memnew(AudioStreamPlayer3D);
+								audio_stream_player->set_name("EntitySounds");
+								audio_stream_player->set_playback_type(AudioServer::PLAYBACK_TYPE_SAMPLE);
+								new_type_info->add_child(audio_stream_player);
+							}
+
+							if (audio_stream_track_idx == -1) {
+								godot_animation->add_track(Animation::TYPE_AUDIO);
+								audio_stream_track_idx = godot_animation->get_track_count() - 1;
+								godot_animation->track_set_path(audio_stream_track_idx, animation_root_node->get_path_to(audio_stream_player));
+								godot_animation->audio_track_set_use_blend(audio_stream_track_idx, false);
+							}
+
+							uint16_t frame_number = p_types.animation_commands.get(command_offset++).command;
+							uint16_t sound_id = p_types.animation_commands.get(command_offset++).command;
+
+							if (sound_id < p_types.sound_map.size()) {
+								uint16_t remapped_sound_id = p_types.sound_map.get(sound_id);
+								if (remapped_sound_id < p_samples.size()) {
+									Ref<AudioStream> sample_stream = p_samples.get(remapped_sound_id);
+									godot_animation->audio_track_insert_key(audio_stream_track_idx, real_t(frame_number - tr_animation.frame_base) / real_t(TR_FPS), sample_stream);
+								}
+							}
+
+
+							Dictionary dict;
+							dict.set("command_name", "play_sound");
+							dict.set("frame_number", frame_number);
+							dict.set("sound_id", sound_id);
+
+							command_list.push_back(dict);
+
+							break;
+						}
+						case 6: {
+							// Flip effect
+							short frame_number = p_types.animation_commands.get(command_offset++).command;
+							short flipeffect_id = p_types.animation_commands.get(command_offset++).command;
+
+							Dictionary dict;
+							dict.set("command_name", "play_flipeffect");
+							dict.set("frame_number", frame_number);
+							dict.set("flipeffect_id", flipeffect_id);
+
+							command_list.push_back(dict);
+							break;
+						}
+					}
+				}
+
 				godot_animation->set_meta("tr_animation_state_changes", animation_state_changes);
 				godot_animation->set_meta("tr_animation_current_animation_state", tr_animation.current_animation_state);
 				godot_animation->set_meta("tr_animation_frame_skip", tr_animation.frame_skip);
 				
 				godot_animation->set_meta("tr_animation_next_animation_id", tr_animation.next_animation_number - p_moveable_info.animation_index);
 				godot_animation->set_meta("tr_animation_next_animation_name", get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index));
-				godot_animation->set_meta("tr_animation_next_frame", tr_animation.next_frame_number - p_animations.get(tr_animation.next_animation_number).frame_base);
-				godot_animation->set_meta("tr_animation_next_time", float(tr_animation.next_frame_number - p_animations.get(tr_animation.next_animation_number).frame_base) / real_t(TR_FPS));
+				godot_animation->set_meta("tr_animation_next_frame", tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base);
+				godot_animation->set_meta("tr_animation_next_time", float(tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base) / real_t(TR_FPS));
 				
 				godot_animation->set_meta("tr_animation_velocity_tr_units", tr_animation.velocity);
 				godot_animation->set_meta("tr_animation_acceleration_tr_units", tr_animation.acceleration);
@@ -862,11 +995,19 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 
 				godot_animation->set_meta("tr_animation_lateral_velocity", -double(tr_animation.lateral_velocity >> 16) * TR_TO_GODOT_SCALE);
 				godot_animation->set_meta("tr_animation_lateral_acceleration", -double(tr_animation.lateral_acceleration >> 16) * TR_TO_GODOT_SCALE);
+
+				godot_animation->set_meta("tr_animation_command_list", command_list);
+
+				animation_position_offsets.append(position_offset);
 			}
 
 			animation_player->add_animation_library("", animation_library);
 			animation_player->set_current_animation("RESET");
-			animation_player->set_root_motion_track(NodePath("Skeleton:Root"));
+			if (p_use_unique_names) {
+				animation_player->set_root_motion_track(NodePath("GeneralSkeleton:Root"));
+			} else {
+				animation_player->set_root_motion_track(NodePath("Skeleton:Root"));
+			}
 
 			for (int i = 0; i < p_moveable_info.mesh_count; i++) {
 				int offset_mesh_index = p_moveable_info.mesh_index + i;
@@ -874,12 +1015,12 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 					Vector3 origin_offset;
 
 					if (i > 0) {
-						ERR_FAIL_COND_V(p_mesh_tree_buffer.size() < (offset_bone_index + 4), nullptr);
+						ERR_FAIL_COND_V(p_types.mesh_tree_buffer.size() < (offset_bone_index + 4), nullptr);
 
-						int flags = p_mesh_tree_buffer.get(offset_bone_index++);
-						int x = p_mesh_tree_buffer.get(offset_bone_index++);
-						int y = p_mesh_tree_buffer.get(offset_bone_index++);
-						int z = p_mesh_tree_buffer.get(offset_bone_index++);
+						int flags = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int x = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int y = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int z = p_types.mesh_tree_buffer.get(offset_bone_index++);
 
 						origin_offset = Vector3(
 							x * TR_TO_GODOT_SCALE,
@@ -971,15 +1112,15 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 									ERR_FAIL_INDEX_V(0, tr_animation.frames.size(), nullptr);
 									first_anim_frame = second_anim_frame = tr_animation.frames[0];
 								} else if (godot_animation->get_loop_mode() == Animation::LOOP_NONE) {
-									ERR_FAIL_INDEX_V(tr_animation.next_animation_number, p_animations.size(), nullptr);
+									ERR_FAIL_INDEX_V(tr_animation.next_animation_number, p_types.animations.size(), nullptr);
 									TRAnimation tr_animation_current = tr_animation;
-									TRAnimation tr_next_animation = p_animations.get(tr_animation_current.next_animation_number);
+									TRAnimation tr_next_animation = p_types.animations.get(tr_animation_current.next_animation_number);
 									
 									int attempts_remaining = 128;
 									while (tr_next_animation.frames.size() == 0) {
-										ERR_FAIL_INDEX_V(tr_next_animation.next_animation_number, p_animations.size(), nullptr);
+										ERR_FAIL_INDEX_V(tr_next_animation.next_animation_number, p_types.animations.size(), nullptr);
 										tr_animation_current = tr_next_animation;
-										tr_next_animation = p_animations.get(tr_next_animation.next_animation_number);
+										tr_next_animation = p_types.animations.get(tr_next_animation.next_animation_number);
 
 										attempts_remaining--;
 										ERR_FAIL_COND_V(attempts_remaining <= 0, nullptr);
@@ -988,35 +1129,57 @@ Node3D *create_godot_moveable_model(uint32_t p_type_info_id, TRMoveableInfo p_mo
 									int next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
 									int next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
 
-									if (tr_next_animation.frame_skip > 0) {
-										int keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
-										ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), nullptr);
-										first_anim_frame = tr_next_animation.frames[keyframe_idx];
-										second_anim_frame = tr_next_animation.frames[keyframe_idx];
-										if (next_keyframe_modulo > 0) {
-											first_anim_frame = tr_next_animation.frames[keyframe_idx];
-
-											if (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
-												while (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
-													tr_next_animation = p_animations.get(tr_next_animation.next_animation_number);
-													keyframe_idx = 0;
-													second_anim_frame = tr_next_animation.frames[keyframe_idx];
-												}
-											} else {
-												second_anim_frame = tr_next_animation.frames[keyframe_idx + 1];
-											}
-
-											interpolation = real_t(next_keyframe_modulo) / real_t(tr_next_animation.frame_skip);
-										}
+									if (anim_idx == tr_animation_current.next_animation_number && tr_animation.next_frame_number == tr_animation.frame_end) {
+										interpolation = 0.0;
+										first_anim_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
+										second_anim_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
 									} else {
-										ERR_FAIL_INDEX_V(next_frame_idx, tr_next_animation.frames.size(), nullptr);
-										first_anim_frame = second_anim_frame = tr_next_animation.frames[next_frame_idx];
+										if (tr_next_animation.frame_skip > 0) {
+											int keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
+											ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), nullptr);
+											first_anim_frame = tr_next_animation.frames[keyframe_idx];
+											second_anim_frame = tr_next_animation.frames[keyframe_idx];
+											if (next_keyframe_modulo > 0) {
+												first_anim_frame = tr_next_animation.frames[keyframe_idx];
+
+												if (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
+													while (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
+														tr_next_animation = p_types.animations.get(tr_next_animation.next_animation_number);
+														keyframe_idx = 0;
+														second_anim_frame = tr_next_animation.frames[keyframe_idx];
+													}
+												} else {
+													second_anim_frame = tr_next_animation.frames[keyframe_idx + 1];
+												}
+
+												interpolation = real_t(next_keyframe_modulo) / real_t(tr_next_animation.frame_skip);
+											}
+										} else {
+											ERR_FAIL_INDEX_V(next_frame_idx, tr_next_animation.frames.size(), nullptr);
+											first_anim_frame = second_anim_frame = tr_next_animation.frames[next_frame_idx];
+										}
 									}
+								}
+								if (i == 0) {
+									TRTransform first_hips_transform = second_anim_frame.transforms.get(0);
+									TRTransform second_hips_transform = second_anim_frame.transforms.get(0);
+
+									first_hips_transform.pos.x += (animation_position_offsets.get(anim_idx).x);
+									first_hips_transform.pos.y += (animation_position_offsets.get(anim_idx).y);
+									first_hips_transform.pos.z += (animation_position_offsets.get(anim_idx).z);
+
+									second_hips_transform.pos.x += (animation_position_offsets.get(anim_idx).x);
+									second_hips_transform.pos.y += (animation_position_offsets.get(anim_idx).y);
+									second_hips_transform.pos.z += (animation_position_offsets.get(anim_idx).z);
+
+									first_anim_frame.transforms.set(i, first_hips_transform);
+									second_anim_frame.transforms.set(i, second_hips_transform);
 								}
 							} else {
 								ERR_FAIL_INDEX_V(frame_idx, tr_animation.frames.size(), nullptr);
 								first_anim_frame = second_anim_frame = tr_animation.frames[frame_idx];
 							}
+
 							Transform3D first_transform = tr_transform_to_godot_transform(first_anim_frame.transforms.get(i));
 							Transform3D second_transform = tr_transform_to_godot_transform(second_anim_frame.transforms.get(i));
 
@@ -1071,12 +1234,18 @@ const int TR_FRAME_POS_Y = 7;
 const int TR_FRAME_POS_Z = 8;
 const int TR_FRAME_ROT = 10;
 
-Vector<Node3D *> create_nodes_for_moveables(HashMap<int, TRMoveableInfo> p_type_info_map, PackedInt32Array p_mesh_tree_buffer, Vector<TRAnimation> p_animations, Vector<TRAnimationStateChange> p_state_changes, Vector<TRAnimationDispatch> p_dispatches, Vector<Ref<ArrayMesh>> p_meshes, TRLevelFormat p_level_format) {
+Vector<Node3D *> create_nodes_for_moveables(
+	HashMap<int,
+	TRMoveableInfo> p_type_info_map,
+	TRTypes p_types,
+	Vector<Ref<ArrayMesh>> p_meshes,
+	Vector<Ref<AudioStream>> p_samples,
+	TRLevelFormat p_level_format) {
 	Vector<Node3D *> types;
 
 	for (int type_id = 0; type_id < 4096; type_id++) {
 		if (p_type_info_map.has(type_id)) {
-			Node3D* new_node = create_godot_moveable_model(type_id, p_type_info_map[type_id], p_mesh_tree_buffer, p_animations, p_state_changes, p_dispatches, p_meshes, p_level_format);
+			Node3D* new_node = create_godot_moveable_model(type_id, p_type_info_map[type_id], p_types, p_meshes, p_samples, p_level_format, false);
 			if (new_node) {
 				types.push_back(new_node);
 			}
@@ -1137,7 +1306,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	// Mesh Pointers
 	int32_t mesh_ptr_count = p_file->get_s32();
-	PackedInt32Array mesh_ptr_buffer = p_file->get_buffer_int32(mesh_ptr_count * sizeof(uint32_t));
+	PackedInt32Array mesh_ptr_buffer = p_file->get_buffer_int32(mesh_ptr_count);
 
 	// Save position of the end of the mesh pointer buffer
 	int mesh_ptr_buffer_end = p_file->get_position();
@@ -1175,11 +1344,14 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	// Animation Commands
 	int32_t anim_command_count = p_file->get_s32();
-	p_file->seek(p_file->get_position() + (anim_command_count * sizeof(TRAnimationCommand)));
+	for (int i = 0; i < anim_command_count; i++) {
+		TRAnimationCommand command = read_tr_animation_command(p_file, p_level_format);
+		tr_types.animation_commands.push_back(command);
+	}
 
 	// Mesh Tree Count
 	int32_t mesh_tree_count = p_file->get_s32();
-	tr_types.mesh_tree_buffer = p_file->get_buffer_int32(mesh_tree_count * sizeof(uint32_t));
+	tr_types.mesh_tree_buffer = p_file->get_buffer_int32(mesh_tree_count);
 
 	// Animation Frame Count
 	int32_t anim_frame_count = p_file->get_s32();
@@ -1575,7 +1747,7 @@ Vector<TRCameraFrame> read_tr_camera_frames(Ref<TRFileAccess> p_file) {
 void read_tr_demo_frames(Ref<TRFileAccess> p_file) {
 	int16_t demo_frame_count = p_file->get_s16();
 
-	p_file->seek(p_file->get_position() + (demo_frame_count * sizeof(uint32_t)));
+	p_file->seek(p_file->get_position() + (demo_frame_count * sizeof(uint8_t)));
 
 	return;
 }
@@ -1629,8 +1801,13 @@ PackedByteArray read_tr_sound_buffer(Ref<TRFileAccess> p_file) {
 
 PackedInt32Array read_tr_sound_indices(Ref<TRFileAccess> p_file) {
 	uint32_t indices_count = p_file->get_u32();
+	PackedInt32Array pi32array;
+	pi32array.resize(indices_count);
+	for (int i = 0; i < indices_count; i++) {
+		pi32array.set(i, p_file->get_u32());
+	}
 
-	return p_file->get_buffer_int32(indices_count);
+	return pi32array;
 }
 
 Vector<TRColor3> read_tr_palette(Ref<TRFileAccess> p_file) {
@@ -2270,6 +2447,32 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArr
 			current_sector++;
 		}
 	}
+
+	current_sector = 0;
+
+	// Walls
+	for (int z = 0; z < p_room.sector_count_z; z++) {
+		for (int x = 0; x < p_room.sector_count_x; x++) {
+			GeometryCalculation calc = calculated.get(current_sector);
+
+			if (z >= 1 && z <= p_room.sector_count_z - 2 && x >= 1 && x <= p_room.sector_count_x - 2) {
+				if (!calc.solid) {
+					int north_sector_id = current_sector + (p_room.sector_count_z);
+					int south_sector_id = current_sector - (p_room.sector_count_z);
+					int east_sector_id = current_sector + 1;
+					int west_sector_id = current_sector - 1;
+
+					//GeometryCalculation north_calc = calculated.get(north_sector_id);
+					//GeometryCalculation south_calc = calculated.get(south_sector_id);
+					//GeometryCalculation east_calc = calculated.get(east_sector_id);
+					//GeometryCalculation west_calc = calculated.get(west_sector_id);
+				}
+			}
+			calculated.set(current_sector, calc);
+			current_sector++;
+		}
+	}
+
 	collision_data->set_faces(buf);
 	collision_data->set_backface_collision_enabled(true);
 
@@ -2318,12 +2521,7 @@ void set_owner_recursively(Node *p_node, Node *p_owner) {
 
 Node3D *generate_godot_scene(
 	Node *p_root,
-	Vector<PackedByteArray> p_textures,
-	Vector<TRColor3> p_palette,
-	Vector<TRRoom> p_rooms,
-	Vector<TREntity> p_entities,
-	TRTypes & p_types,
-	PackedByteArray p_floor_data,
+	TRLevelData level_data,
 	TRLevelFormat p_level_format,
 	bool p_lara_only) {
 
@@ -2377,7 +2575,7 @@ Node3D *generate_godot_scene(
 			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
 				uint32_t index = ((y / 16) * 16) + (x / 16);
 
-				TRColor3 color = p_palette.get(index);
+				TRColor3 color = level_data.palette.get(index);
 				palette_image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 			}
 		}
@@ -2389,24 +2587,24 @@ Node3D *generate_godot_scene(
 	}
 
 	// Image Textures
-	for (int i = 0; i < p_textures.size(); i++) {
-		PackedByteArray current_texture = p_textures.get(i);
+	for (int i = 0; i < level_data.textures.size(); i++) {
+		PackedByteArray current_texture = level_data.textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
 		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
 			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
 				uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 				if (index == 0x00) {
-					TRColor3 color = p_palette.get(index);
+					TRColor3 color = level_data.palette.get(index);
 					image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
 				} else {
-					TRColor3 color = p_palette.get(index);
+					TRColor3 color = level_data.palette.get(index);
 					image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 				}
 			}
 		}
 
-#if 1
+#if 0
 		String image_path = String("Texture_") + itos(i) + String(".png");
 		image->save_png(image_path);
 #endif
@@ -2420,9 +2618,84 @@ Node3D *generate_godot_scene(
 
 
 	Vector<Ref<ArrayMesh>> meshes;
-	for (TRMesh& tr_mesh : p_types.meshes) {
-		Ref<ArrayMesh> mesh = tr_mesh_to_godot_mesh(tr_mesh, entity_materials, entity_trans_materials, palette_material, p_types);
+	for (TRMesh& tr_mesh : level_data.types.meshes) {
+		Ref<ArrayMesh> mesh = tr_mesh_to_godot_mesh(tr_mesh, entity_materials, entity_trans_materials, palette_material, level_data.types);
 		meshes.push_back(mesh);
+	}
+
+	Vector<Ref<AudioStream>> samples;
+
+	// Audio
+	for (TRSoundInfo tr_sound_info : level_data.sound_infos) {
+		int32_t sample_id = tr_sound_info.sample_index;
+		int loop_mode = tr_sound_info.characteristics & 0x2;;
+		int sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
+
+		Ref<AudioStreamRandomizer> sample_collection = memnew(AudioStreamRandomizer);
+
+		switch (loop_mode) {
+			case 0:
+				sample_collection->set_meta("tr_loop_mode", "looping_disabled");
+				break;
+			case 1:
+				sample_collection->set_meta("tr_loop_mode", "one_shot_rewind");
+				break;
+			case 2:
+				sample_collection->set_meta("tr_loop_mode", "looping_enabled");
+				break;
+			case 3:
+				sample_collection->set_meta("tr_loop_mode", "one_shot_wait");
+				break;
+		}
+
+		sample_collection->set_playback_mode(AudioStreamRandomizer::PLAYBACK_RANDOM);
+
+		for (int i = 0; i < sample_count; i++) {
+			uint32_t sample_offset = level_data.sound_indices.get(sample_id + i);
+			Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(level_data.sound_buffer);
+
+			Ref<AudioStreamWAV> sample = memnew(AudioStreamWAV);
+			buffer_access->seek(sample_offset);
+			if (buffer_access->get_fixed_string(4) == "RIFF") {
+				uint32_t file_size = buffer_access->get_u32();
+				if (file_size > 0) {
+					if (buffer_access->get_fixed_string(4) == "WAVE") {
+						if (buffer_access->get_fixed_string(4) == "fmt ") {
+							uint32_t length = buffer_access->get_u32();
+							uint16_t format_type = buffer_access->get_u16();
+							ERR_FAIL_COND_V(format_type != 1, nullptr);
+							uint16_t channels = buffer_access->get_u16();
+							ERR_FAIL_COND_V(channels <= 0 || channels > 2, nullptr);
+							uint32_t mix_rate = buffer_access->get_u32();
+							uint32_t byte_per_second = buffer_access->get_u32();
+							uint16_t byte_per_block = buffer_access->get_u16();
+							uint16_t bits_per_sample = buffer_access->get_u16();
+							ERR_FAIL_COND_V(bits_per_sample != 16 && bits_per_sample != 8, nullptr);
+
+							if (buffer_access->get_fixed_string(4) == "data") {
+								uint32_t buffer_size = buffer_access->get_u32();
+								PackedByteArray pba = buffer_access->get_buffer(buffer_size);
+								for (int buf_idx = 0; buf_idx < pba.size(); buf_idx++) {
+									pba.ptrw()[buf_idx] = pba.ptr()[buf_idx] - 128;
+								}
+								sample->set_format(bits_per_sample == 16 ? AudioStreamWAV::FORMAT_16_BITS : AudioStreamWAV::FORMAT_8_BITS);
+								sample->set_stereo(channels == 1 ? false : true);
+								sample->set_mix_rate(mix_rate);
+								sample->set_loop_mode(loop_mode == 2 ? AudioStreamWAV::LOOP_FORWARD : AudioStreamWAV::LOOP_DISABLED);
+								sample->set_data(pba);
+								sample->set_loop_begin(0);
+								sample->set_loop_end(buffer_size);
+
+								sample->save_to_wav("res://test.wav");
+
+								sample_collection->add_stream(i, sample);
+							}
+						}
+					}
+				}
+			}
+		}
+		samples.append(sample_collection);
 	}
 
 	Node *scene_owner = p_root->get_owner() != nullptr ? p_root->get_owner() : p_root;
@@ -2434,7 +2707,12 @@ Node3D *generate_godot_scene(
 		rooms_node->set_name("TRRooms");
 		rooms_node->set_owner(scene_owner);
 
-		Vector<Node3D*> moveable_node = create_nodes_for_moveables(p_types.moveable_info_map, p_types.mesh_tree_buffer, p_types.animations, p_types.animation_state_changes, p_types.animation_dispatches, meshes, p_level_format);
+		Vector<Node3D*> moveable_node = create_nodes_for_moveables(
+			level_data.types.moveable_info_map,
+			level_data.types,
+			meshes,
+			samples,
+			p_level_format);
 
 		for (Node3D *moveable : moveable_node) {
 			rooms_node->add_child(moveable);
@@ -2448,7 +2726,7 @@ Node3D *generate_godot_scene(
 		entities_node->set_owner(scene_owner);
 
 		uint32_t entity_idx = 0;
-		for (const TREntity& entity : p_entities) {
+		for (const TREntity& entity : level_data.entities) {
 			Node3D * entity_node = memnew(Node3D);
 			entity_node->set_transform(Transform3D(Basis().rotated(
 				Vector3(0.0, 1.0, 0.0), Math::deg_to_rad((float)entity.transform.rot.y / 16384.0f * -90)), Vector3(
@@ -2461,8 +2739,15 @@ Node3D *generate_godot_scene(
 			entity_node->set_owner(scene_owner);
 			entity_node->set_display_folded(true);
 
-			if (p_types.moveable_info_map.has(entity.type_id)) {
-				Node3D* new_node = create_godot_moveable_model(entity.type_id, p_types.moveable_info_map[entity.type_id], p_types.mesh_tree_buffer, p_types.animations, p_types.animation_state_changes, p_types.animation_dispatches, meshes, p_level_format);
+			if (level_data.types.moveable_info_map.has(entity.type_id)) {
+				Node3D* new_node = create_godot_moveable_model(
+					entity.type_id,
+					level_data.types.moveable_info_map[entity.type_id],
+					level_data.types,
+					meshes,
+					samples,
+					p_level_format,
+					false);
 				ERR_FAIL_NULL_V(new_node, nullptr);
 				Node3D* type = new_node;
 				entity_node->add_child(type);
@@ -2474,7 +2759,7 @@ Node3D *generate_godot_scene(
 	
 
 		uint32_t room_idx = 0;
-		for (const TRRoom& room : p_rooms) {
+		for (const TRRoom& room : level_data.rooms) {
 			Node3D* node_3d = memnew(Node3D);
 			node_3d->set_name(String("Room_") + itos(room_idx));
 			node_3d->set_display_folded(true);
@@ -2488,7 +2773,7 @@ Node3D *generate_godot_scene(
 					mi->set_name(String("RoomMesh_") + itos(room_idx));
 					node_3d->add_child(mi);
 
-					Ref<ArrayMesh> mesh = tr_room_data_to_godot_mesh(room.data, level_materials, level_trans_materials, p_types);
+					Ref<ArrayMesh> mesh = tr_room_data_to_godot_mesh(room.data, level_materials, level_trans_materials, level_data.types);
 
 					mi->set_position(Vector3());
 					mi->set_owner(scene_owner);
@@ -2503,7 +2788,7 @@ Node3D *generate_godot_scene(
 					static_body->set_owner(scene_owner);
 					static_body->set_position(Vector3());
 
-					CollisionShape3D* collision_shape = tr_room_to_collision_shape(room, p_floor_data);
+					CollisionShape3D* collision_shape = tr_room_to_collision_shape(room, level_data.floor_data);
 
 					static_body->add_child(collision_shape);
 					collision_shape->set_owner(scene_owner);
@@ -2514,12 +2799,12 @@ Node3D *generate_godot_scene(
 				for (const TRRoomStaticMesh& room_static_mesh : room.room_static_meshes) {
 					int mesh_static_number = room_static_mesh.mesh_id;
 
-					if (p_types.static_info_map.has(mesh_static_number)) {
-						TRStaticInfo static_info = p_types.static_info_map[mesh_static_number];
+					if (level_data.types.static_info_map.has(mesh_static_number)) {
+						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
 					}
 
-					if (p_types.static_info_map.has(mesh_static_number)) {
-						TRStaticInfo static_info = p_types.static_info_map[mesh_static_number];
+					if (level_data.types.static_info_map.has(mesh_static_number)) {
+						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
 						if (static_info.flags & 2) {
 							int mesh_number = static_info.mesh_number;
 							if (mesh_number < meshes.size() && mesh_number >= 0) {
@@ -2546,7 +2831,14 @@ Node3D *generate_godot_scene(
 		}
 		return rooms_node;
 	} else {
-		Node3D* new_node = create_godot_moveable_model(0, p_types.moveable_info_map[0], p_types.mesh_tree_buffer, p_types.animations, p_types.animation_state_changes, p_types.animation_dispatches, meshes, p_level_format);
+		Node3D* new_node = create_godot_moveable_model(
+			0,
+			level_data.types.moveable_info_map[0],
+			level_data.types,
+			meshes,
+			samples,
+			p_level_format,
+			true);
 		ERR_FAIL_COND_V(!new_node, nullptr);
 
 		p_root->add_child(new_node);
@@ -2591,12 +2883,7 @@ void TRLevel::load_level(bool p_lara_only) {
 
 	Node3D* rooms_node = generate_godot_scene(
 		this, 
-		level_data.textures,
-		level_data.palette,
-		level_data.rooms,
-		level_data.entities,
-		level_data.types,
-		level_data.floor_data,
+		level_data,
 		format,
 		p_lara_only);
 }
@@ -2759,16 +3046,20 @@ TRLevelData TRLevel::load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_l
 		read_tr_demo_frames(file);
 	}
 
-	// CURRENTLY BROKEN
-	if (0) {
-		Vector<uint16_t> sound_map = read_tr_sound_map(file, p_level_format);
-		Vector<TRSoundInfo> sound_infos = read_tr_sound_infos(file, p_level_format);
+	Vector<uint16_t> sound_map = read_tr_sound_map(file, p_level_format);
+	types.sound_map = sound_map;
 
-		PackedByteArray buffer = read_tr_sound_buffer(file);
-		PackedInt32Array indices = read_tr_sound_indices(file);
+	Vector<TRSoundInfo> sound_infos = read_tr_sound_infos(file, p_level_format);
+	PackedByteArray sound_buffer;
 
-		for (int i = 0; i < indices.size(); i++) {
-		}
+	if (p_level_format == TR1_PC) {
+		sound_buffer = read_tr_sound_buffer(file);
+	}
+
+	PackedInt32Array sound_indices = read_tr_sound_indices(file);
+
+	if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
+
 	}
 
 #if 0
@@ -2782,6 +3073,10 @@ TRLevelData TRLevel::load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_l
 	level_data.entities = entities;
 	level_data.types = types;
 	level_data.floor_data = floor_data;
+	level_data.sound_map = sound_map;
+	level_data.sound_infos = sound_infos;
+	level_data.sound_buffer = sound_buffer;
+	level_data.sound_indices = sound_indices;
 
 	return level_data;
 }

@@ -245,7 +245,7 @@ struct TRTextureInfo {
 
 struct tr_face4
 {
-	uint16_t vertices[4];
+	uint16_t verticies[4];
 	uint16_t texture;
 };
 
@@ -275,6 +275,15 @@ struct TRMesh {
 	Vector<TRFaceTriangle> color_triangles;
 };
 
+struct TRSoundInfo {
+	uint16_t sample_index;
+	uint16_t volume;
+	uint8_t range;
+	uint16_t chance;
+	uint8_t pitch;
+	uint16_t characteristics;
+};
+
 struct TRTypes {
 	Vector<TRTextureInfo> texture_infos;
 	Vector<TRMesh> meshes;
@@ -282,6 +291,7 @@ struct TRTypes {
 	Vector<TRAnimationStateChange> animation_state_changes;
 	Vector<TRAnimationDispatch> animation_dispatches;
 	Vector<TRAnimationCommand> animation_commands;
+	Vector<uint16_t> sound_map;
 	PackedInt32Array mesh_tree_buffer;
 
 	HashMap<int, TRMoveableInfo > moveable_info_map;
@@ -375,15 +385,6 @@ struct TREntity {
 	int16_t ocb;
 };
 
-struct TRLevelData {
-	Vector<PackedByteArray> textures;
-	Vector<TRColor3> palette;
-	Vector<TRRoom> rooms;
-	PackedByteArray floor_data;
-	TRTypes types;
-	Vector<TREntity> entities;
-};
-
 struct TRCameraFrame {
 	TRPos target;
 	TRPos pos;
@@ -391,11 +392,15 @@ struct TRCameraFrame {
 	int16_t roll;
 };
 
-struct TRSoundInfo {
-	uint16_t sample_index;
-	uint16_t volume;
-	uint8_t range;
-	uint16_t chance;
-	uint8_t pitch;
-	uint16_t characteristics;
+struct TRLevelData {
+	Vector<PackedByteArray> textures;
+	Vector<TRColor3> palette;
+	Vector<TRRoom> rooms;
+	PackedByteArray floor_data;
+	TRTypes types;
+	Vector<TREntity> entities;
+	Vector<uint16_t> sound_map;
+	Vector<TRSoundInfo> sound_infos;
+	PackedByteArray sound_buffer;
+	PackedInt32Array sound_indices;
 };

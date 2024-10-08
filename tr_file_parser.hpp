@@ -73,9 +73,17 @@ public:
 	PackedInt32Array get_buffer_int32(uint64_t p_length) {
 		PackedInt32Array buffer;
 		buffer.resize(p_length);
-		uint64_t buffer_size = stream_peer_buffer->get_data((uint8_t *)buffer.ptrw(), p_length);
+		uint64_t buffer_size = stream_peer_buffer->get_data((uint8_t *)buffer.ptrw(), p_length * sizeof(int32_t));
 
 		return buffer;
+	}
+
+	String get_fixed_string(uint64_t p_length) {
+		PackedByteArray buffer = get_buffer(p_length);
+		String string;
+		string.parse_utf8((const char*)buffer.ptr(), buffer.size());
+
+		return string;
 	}
 
 	static Ref<TRFileAccess> open(const String &p_path, Error *r_error) {
