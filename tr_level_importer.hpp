@@ -55,7 +55,7 @@ public:
 		return "Default";
 	}
 
-	void _get_import_options(const String& p_path, List<ResourceImporter::ImportOption>* r_options, int p_preset) const {
+	void _get_import_options(const String& p_path, List<ResourceImporter::ImportOption>* r_options, int32_t p_preset) const {
 		return;
 	}
 

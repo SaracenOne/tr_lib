@@ -27,31 +27,38 @@ class TRFileAccess : public RefCounted {
 
 public:
 	int8_t get_s8() {
-		return static_cast<int8_t>(stream_peer_buffer->get_8());
+		int8_t s8 = static_cast<int8_t>(stream_peer_buffer->get_8());
+		return s8;
 	}
 
 	int16_t get_s16() {
-		return static_cast<int16_t>(stream_peer_buffer->get_16());
+		int16_t s16 = static_cast<int16_t>(stream_peer_buffer->get_16());
+		return s16;
 	}
 
 	int32_t get_s32() {
-		return static_cast<int32_t>(stream_peer_buffer->get_32());
+		int32_t s32 = static_cast<int32_t>(stream_peer_buffer->get_32());
+		return s32;
 	}
 
 	uint8_t get_u8() {
-		return static_cast<uint8_t>(stream_peer_buffer->get_u8());
+		uint8_t u8 = static_cast<uint8_t>(stream_peer_buffer->get_u8());
+		return u8;
 	}
 
 	uint16_t get_u16() {
-		return static_cast<uint16_t>(stream_peer_buffer->get_u16());
+		uint16_t u16 = static_cast<uint16_t>(stream_peer_buffer->get_u16());
+		return u16;
 	}
 
 	uint32_t get_u32() {
-		return static_cast<uint32_t>(stream_peer_buffer->get_u32());
+		uint32_t u32 = static_cast<uint32_t>(stream_peer_buffer->get_u32());
+		return u32;
 	}
 
-	uint32_t get_float() {
-		return static_cast<float>(stream_peer_buffer->get_float());
+	float get_float() {
+		float flt = static_cast<float>(stream_peer_buffer->get_float());
+		return flt;
 	}
 
 	uint64_t get_position() {
@@ -60,6 +67,10 @@ public:
 
 	void seek(uint64_t p_position) {
 		stream_peer_buffer->seek(p_position);
+	}
+
+	int32_t get_size() {
+		return stream_peer_buffer->get_size();
 	}
 
 	PackedByteArray get_buffer(uint64_t p_length) {

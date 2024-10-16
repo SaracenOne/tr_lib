@@ -3,6 +3,7 @@
 
 #include "../tr_level.hpp"
 
+#include "editor/editor_interface.h"
 #include "editor/editor_node.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/plugins/node_3d_editor_plugin.h"
@@ -25,6 +26,7 @@ protected:
 
 		level_node->clear_level();
 		level_node->load_level(lara_only_toggle->is_pressed());
+		get_editor_interface()->mark_scene_as_unsaved();
 	}
 public:
 	virtual String get_name() const override { return "TRLevel"; }

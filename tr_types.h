@@ -112,8 +112,8 @@ struct TRRoomLight {
 struct TRRoomStaticMesh {
 	TRPos pos;
 	tr_angle rotation;
-	uint16_t intensity;
-	uint16_t intensity2;
+	Color color_1;
+	Color color_2;
 	uint16_t mesh_id;
 };
 
@@ -157,6 +157,7 @@ struct TRRoom {
 
 	uint8_t water_scheme;
 	uint8_t reverb_info;
+	uint8_t alternate_group = -1;
 };
 
 struct TRBoundingBox {
@@ -392,8 +393,17 @@ struct TRCameraFrame {
 	int16_t roll;
 };
 
+enum TRTextureType {
+	TR_TEXTURE_TYPE_8_PAL,
+	TR_TEXTURE_TYPE_16,
+	TR_TEXTURE_TYPE_32
+};
+
 struct TRLevelData {
-	Vector<PackedByteArray> textures;
+	TRLevelFormat format;
+	TRTextureType texture_type;
+	Vector<PackedByteArray> level_textures;
+	Vector<PackedByteArray> entity_textures;
 	Vector<TRColor3> palette;
 	Vector<TRRoom> rooms;
 	PackedByteArray floor_data;

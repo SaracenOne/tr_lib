@@ -320,27 +320,36 @@ static String get_tr2_type_info_name(uint32_t p_type_info_id) {
 static String get_tr2_bone_name(uint32_t p_type_info_id, uint32_t p_bone_id) {
 	switch (p_type_info_id) {
 	case 0:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 1:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 3:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 4:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 5:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 6:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 7:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 8:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 9:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 11:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	case 12:
-		return get_tr1_lara_bone_name(p_bone_id);
+		return get_lara_bone_name(p_bone_id);
 	}
 	return String("bone_") + itos(p_bone_id);
+}
+
+static String get_tr2_animation_name(size_t p_type_info_id, size_t p_animation_id) {
+	switch (p_type_info_id) {
+		case 0: {
+			return get_lara_animation_name(p_animation_id, TR2_PC);
+		} break;
+	}
+	return String("animation_") + itos(p_animation_id);
 }

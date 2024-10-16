@@ -1,5 +1,8 @@
 #include "tr_level.hpp"
 
+#include <core/io/stream_peer_gzip.h>
+#include "core/math/math_funcs.h"
+#include <editor/editor_file_system.h>
 #include <scene/3d/audio_stream_player_3d.h>
 #include <scene/3d/bone_attachment_3d.h>
 #include <scene/3d/lightmap_gi.h>
@@ -7,6 +10,8 @@
 #include <scene/3d/physics/collision_shape_3d.h>
 #include <scene/3d/physics/physics_body_3d.h>
 #include <scene/3d/physics/static_body_3d.h>
+#include <scene/animation/animation_blend_tree.h>
+#include <scene/animation/animation_node_state_machine.h>
 #include <scene/animation/animation_player.h>
 #include <scene/resources/audio_stream_wav.h>
 #include <scene/resources/mesh_data_tool.h>
@@ -15,13 +20,13 @@
 #include <scene/resources/3d/primitive_meshes.h>
 #include <scene/resources/surface_tool.h>
 #include <scene/resources/image_texture.h>
-#include <editor/editor_file_system.h>
-#include <core/io/stream_peer_gzip.h>
+#include <scene/3d/marker_3d.h>
+#include <scene/3d/remote_transform_3d.h>
+
 
 #ifdef IS_MODULE
 using namespace godot;
 #endif
-
 #define TR_TO_GODOT_SCALE 0.001 * 2.0
 #define TR_TEXTILE_SIZE 256
 
@@ -138,12 +143,12 @@ TRRoomVertex read_tr_room_vertex(Ref<TRFileAccess> p_file, TRLevelFormat p_forma
 	uint16_t first_shade_value = p_file->get_s16();
 	room_vertex.attributes = 0;
 	uint16_t second_shade_value = first_shade_value;
-	if (p_format == TR2_PC || p_format == TR3_PC) {
+	if (p_format == TR2_PC || p_format == TR3_PC || p_format == TR4_PC) {
 		room_vertex.attributes  = p_file->get_u16();
 		second_shade_value = p_file->get_s16();
 	}
 
-	if (p_format == TR3_PC) {
+	if (p_format == TR3_PC || p_format == TR4_PC) {
 		room_vertex.color = tr_color_shade_to_godot_color(second_shade_value);
 		room_vertex.color2 = room_vertex.color;
 	} else {
@@ -161,7 +166,7 @@ TRRoomVertex read_tr_room_vertex(Ref<TRFileAccess> p_file, TRLevelFormat p_forma
 TRFaceTriangle read_tr_face_triangle(Ref<TRFileAccess> p_file) {
 	TRFaceTriangle face_triangle;
 
-	for (int i = 0; i < 3; i++) {
+	for (int32_t i = 0; i < 3; i++) {
 		face_triangle.indices[i] = p_file->get_s16();
 	}
 	face_triangle.tex_info_id = p_file->get_s16();
@@ -172,7 +177,7 @@ TRFaceTriangle read_tr_face_triangle(Ref<TRFileAccess> p_file) {
 TRFaceQuad read_tr_face_quad(Ref<TRFileAccess> p_file) {
 	TRFaceQuad face_quad;
 
-	for (int i = 0; i < 4; i++) {
+	for (int32_t i = 0; i < 4; i++) {
 		face_quad.indices[i] = p_file->get_s16();
 	}
 	face_quad.tex_info_id = p_file->get_s16();
@@ -183,7 +188,7 @@ TRFaceQuad read_tr_face_quad(Ref<TRFileAccess> p_file) {
 TRFaceTriangle read_tr_mesh_face_triangle(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRFaceTriangle face_triangle;
 
-	for (int i = 0; i < 3; i++) {
+	for (int32_t i = 0; i < 3; i++) {
 		face_triangle.indices[i] = p_file->get_s16();
 	}
 	face_triangle.tex_info_id = p_file->get_s16();
@@ -197,7 +202,7 @@ TRFaceTriangle read_tr_mesh_face_triangle(Ref<TRFileAccess> p_file, TRLevelForma
 TRFaceQuad read_tr_mesh_face_quad(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRFaceQuad face_quad;
 
-	for (int i = 0; i < 4; i++) {
+	for (int32_t i = 0; i < 4; i++) {
 		face_quad.indices[i] = p_file->get_s16();
 	}
 	face_quad.tex_info_id = p_file->get_s16();
@@ -223,28 +228,28 @@ TRRoomData read_tr_room_data(Ref<TRFileAccess> p_file, TRLevelFormat p_format) {
 	// Vertex buffer
 	room_data.room_vertex_count = p_file->get_s16();
 	room_data.room_vertices.resize(room_data.room_vertex_count);
-	for (int i = 0; i < room_data.room_vertex_count; i++) {
+	for (int32_t i = 0; i < room_data.room_vertex_count; i++) {
 		room_data.room_vertices.set(i, read_tr_room_vertex(p_file, p_format));
 	}
 
 	// Quad buffer
 	room_data.room_quad_count = p_file->get_s16();
 	room_data.room_quads.resize(room_data.room_quad_count);
-	for (int i = 0; i < room_data.room_quad_count; i++) {
+	for (int32_t i = 0; i < room_data.room_quad_count; i++) {
 		room_data.room_quads.set(i, read_tr_face_quad(p_file));
 	}
 
 	// Triangle buffer
 	room_data.room_triangle_count = p_file->get_s16();
 	room_data.room_triangles.resize(room_data.room_triangle_count);
-	for (int i = 0; i < room_data.room_triangle_count; i++) {
+	for (int32_t i = 0; i < room_data.room_triangle_count; i++) {
 		room_data.room_triangles.set(i, read_tr_face_triangle(p_file));
 	}
 
 	// Sprite buffer
 	room_data.room_sprite_count = p_file->get_s16();
 	room_data.room_sprites.resize(room_data.room_sprite_count);
-	for (int i = 0; i < room_data.room_sprite_count; i++) {
+	for (int32_t i = 0; i < room_data.room_sprite_count; i++) {
 		room_data.room_sprites.set(i, read_tr_room_sprite(p_file));
 	}
 
@@ -272,6 +277,17 @@ TRColor3 read_tr_color3(Ref<TRFileAccess> p_file) {
 	color_3.b = p_file->get_u8();
 
 	return color_3;
+}
+
+TRColor4 read_tr_color4_argb(Ref<TRFileAccess> p_file) {
+	TRColor4 color_4;
+
+	color_4.a = p_file->get_u8();
+	color_4.r = p_file->get_u8();
+	color_4.g = p_file->get_u8();
+	color_4.b = p_file->get_u8();
+
+	return color_4;
 }
 
 TRRoomLight read_tr_light(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
@@ -338,12 +354,21 @@ TRRoomStaticMesh read_tr_room_static_mesh(Ref<TRFileAccess> p_file, TRLevelForma
 
 	room_static_mesh.pos = read_tr_pos(p_file);
 	room_static_mesh.rotation = static_cast<tr_angle>(p_file->get_s16());
-	room_static_mesh.intensity = p_file->get_u16();
-	if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
-		room_static_mesh.intensity2 = p_file->get_u16();
-	} else {
-		room_static_mesh.intensity2 = room_static_mesh.intensity;
+	uint16_t intensity_or_color = p_file->get_u16();
+	uint16_t intensity_or_color_2 = intensity_or_color;
+
+	if (p_level_format == TR2_PC || p_level_format == TR3_PC || p_level_format == TR4_PC) {
+		intensity_or_color_2 = p_file->get_u16();
 	}
+
+	if (p_level_format == TR3_PC || p_level_format == TR4_PC) {
+		room_static_mesh.color_1 = tr_color_shade_to_godot_color(intensity_or_color);
+		room_static_mesh.color_2 = tr_color_shade_to_godot_color(intensity_or_color_2);
+	} else {
+		room_static_mesh.color_1 = tr_monochrome_shade_to_godot_color(intensity_or_color);
+		room_static_mesh.color_2 = tr_monochrome_shade_to_godot_color(intensity_or_color_2);
+	}
+
 	room_static_mesh.mesh_id = p_file->get_u16();
 
 	return room_static_mesh;
@@ -354,7 +379,7 @@ TRRoomPortal read_tr_room_portal(Ref<TRFileAccess> p_file) {
 
 	room_portal.adjoining_room = p_file->get_u16();
 	room_portal.normal = read_tr_vertex(p_file);
-	for (int i = 0; i < 4; i++) {
+	for (int32_t i = 0; i < 4; i++) {
 		room_portal.vertices[i] = read_tr_vertex(p_file);
 	}
 
@@ -376,19 +401,25 @@ TRRoomInfo read_tr_room_info(Ref<TRFileAccess> p_file) {
 TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRRoom room;
 
+	uint32_t rt_position = p_file->get_position();
+
 	room.info = read_tr_room_info(p_file);
+
+	uint32_t rt_position2 = p_file->get_position();
 
 	// Room's mesh data parsing
 	uint32_t data_count = p_file->get_u32();
+	uint32_t offset = data_count * sizeof(uint16_t);
 	uint32_t data_end = p_file->get_position() + (data_count * sizeof(uint16_t));
 
 	room.data = read_tr_room_data(p_file, p_level_format);
 
 	p_file->seek(data_end);
 
-	room.portal_count = p_file->get_s16();
+	int16_t portal_count = p_file->get_s16();
+	room.portal_count = portal_count;
 	room.portals.resize(room.portal_count);
-	for (int i = 0; i < room.portal_count; i++) {
+	for (int32_t i = 0; i < room.portal_count; i++) {
 		room.portals.set(i, read_tr_room_portal(p_file));
 	}
 
@@ -402,7 +433,13 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	}
 
 	if (p_level_format == TR4_PC) {
-		uint32_t ambient_light = p_file->get_u32();
+		TRColor4 room_color = read_tr_color4_argb(p_file);
+		room.ambient_light.set_r8(room_color.r);
+		room.ambient_light.set_g8(room_color.g);
+		room.ambient_light.set_b8(room_color.b);
+		room.ambient_light.set_a8(room_color.a);
+
+		room.ambient_light_alt = room.ambient_light;
 	} else {
 		if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
 			room.ambient_light = tr_monochrome_shade_to_godot_color(p_file->get_u16());
@@ -421,13 +458,13 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	room.light_count = p_file->get_u16();
 	room.lights.resize(room.light_count);
-	for (int i = 0; i < room.light_count; i++) {
+	for (int32_t i = 0; i < room.light_count; i++) {
 		room.lights.set(i, read_tr_light(p_file, p_level_format));
 	}
 
 	room.room_static_mesh_count = p_file->get_u16();
 	room.room_static_meshes.resize(room.room_static_mesh_count);
-	for (int i = 0; i < room.room_static_mesh_count; i++) {
+	for (int32_t i = 0; i < room.room_static_mesh_count; i++) {
 		room.room_static_meshes.set(i, read_tr_room_static_mesh(p_file, p_level_format));
 	}
 
@@ -437,7 +474,7 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	// If the room is underwater, change the color
 	if (p_level_format == TR1_PC || p_level_format == TR2_PC) {
 		if (room.room_flags & 1) {
-			for (int i = 0; i < room.data.room_vertex_count; i++) {
+			for (int32_t i = 0; i < room.data.room_vertex_count; i++) {
 				TRRoomVertex room_vertex = room.data.room_vertices.get(i);
 				room_vertex.color *= Color(0.0, 0.5, 1.0);
 				room.data.room_vertices.set(i, room_vertex);
@@ -449,7 +486,11 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 		room.water_scheme = p_file->get_u8();
 		room.reverb_info = p_file->get_u8();
 
-		uint8_t filler = p_file->get_u8();
+		if (p_level_format == TR4_PC) {
+			room.alternate_group = p_file->get_u8();
+		} else {
+			uint8_t _filler = p_file->get_u8();
+		}
 	}
 
 	return room;
@@ -602,7 +643,7 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	tr_mesh.vertex_count = p_file->get_s16();
 	tr_mesh.vertices.resize(tr_mesh.vertex_count);
-	for (int i = 0; i < tr_mesh.vertex_count; i++) {
+	for (int32_t i = 0; i < tr_mesh.vertex_count; i++) {
 		TRVertex vertex = read_tr_vertex(p_file);
 		tr_mesh.vertices.set(i, vertex);
 	}
@@ -614,13 +655,13 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	
 	if (tr_mesh.normal_count > 0) {
 		tr_mesh.normals.resize(abs_num_normals);
-		for (int i = 0; i < abs_num_normals; i++) {
+		for (int32_t i = 0; i < abs_num_normals; i++) {
 			TRVertex normal = read_tr_vertex(p_file);
 			tr_mesh.normals.set(i, normal);
 		}
 	} else {
 		tr_mesh.colors.resize(abs_num_normals);
-		for (int i = 0; i < abs_num_normals; i++) {
+		for (int32_t i = 0; i < abs_num_normals; i++) {
 			int16_t color = p_file->get_s16();
 			tr_mesh.colors.set(i, color);
 		}
@@ -629,14 +670,14 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	// Texture Quad buffer
 	tr_mesh.texture_quads_count = p_file->get_s16();
 	tr_mesh.texture_quads.resize(tr_mesh.texture_quads_count);
-	for (int i = 0; i < tr_mesh.texture_quads_count; i++) {
+	for (int32_t i = 0; i < tr_mesh.texture_quads_count; i++) {
 		tr_mesh.texture_quads.set(i, read_tr_mesh_face_quad(p_file, p_level_format));
 	}
 
 	// Texture Triangle buffer
 	tr_mesh.texture_triangles_count = p_file->get_s16();
 	tr_mesh.texture_triangles.resize(tr_mesh.texture_triangles_count);
-	for (int i = 0; i < tr_mesh.texture_triangles_count; i++) {
+	for (int32_t i = 0; i < tr_mesh.texture_triangles_count; i++) {
 		tr_mesh.texture_triangles.set(i, read_tr_mesh_face_triangle(p_file, p_level_format));
 	}
 
@@ -644,16 +685,19 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 		// Color Quad buffer
 		tr_mesh.color_quads_count = p_file->get_s16();
 		tr_mesh.color_quads.resize(tr_mesh.color_quads_count);
-		for (int i = 0; i < tr_mesh.color_quads_count; i++) {
+		for (int32_t i = 0; i < tr_mesh.color_quads_count; i++) {
 			tr_mesh.color_quads.set(i, read_tr_mesh_face_quad(p_file, p_level_format));
 		}
 
 		// Color Triangle buffer
 		tr_mesh.color_triangles_count = p_file->get_s16();
 		tr_mesh.color_triangles.resize(tr_mesh.color_triangles_count);
-		for (int i = 0; i < tr_mesh.color_triangles_count; i++) {
+		for (int32_t i = 0; i < tr_mesh.color_triangles_count; i++) {
 			tr_mesh.color_triangles.set(i, read_tr_mesh_face_triangle(p_file, p_level_format));
 		}
+	} else {
+		tr_mesh.color_quads_count = 0;
+		tr_mesh.color_triangles_count = 0;
 	}
 
 	return tr_mesh;
@@ -667,24 +711,34 @@ Node3D *create_godot_moveable_model(
 	Vector<Ref<AudioStream>> p_samples,
 	TRLevelFormat p_level_format,
 	bool p_use_unique_names) {
-	Node3D* new_type_info = memnew(Node3D);
+	Node3D *new_type_info = memnew(Node3D);
 	new_type_info->set_name(get_type_info_name(p_type_info_id, p_level_format));
 
-	Vector<int> bone_stack;
+	Vector<int32_t> bone_stack;
 
-	int offset_bone_index = p_moveable_info.bone_index;
+	int32_t offset_bone_index = p_moveable_info.bone_index;
 
-	AudioStreamPlayer3D* audio_stream_player = nullptr;
+	AudioStreamPlayer3D *audio_stream_player = nullptr;
 
 	Vector<TRPos> animation_position_offsets;
 
-	int current_parent = -1;
+	HashMap<int32_t, int32_t> mesh_to_bone_mapping;
+	HashMap<int32_t, int32_t> bone_to_mesh_mapping;
+
+	Vector<MeshInstance3D *> mesh_instances;
+	int32_t current_parent = -1;
 	if (p_moveable_info.mesh_count > 0) {
 		// TODO: Separate animation handling for single mesh types
 		if (p_moveable_info.mesh_count > 0) {
+			Node3D *armature = memnew(Node3D);
+			armature->set_display_folded(true);
+			armature->set_name("Armature");
+
+			new_type_info->add_child(armature);
+
 			Skeleton3D *skeleton = memnew(Skeleton3D);
 			
-			new_type_info->add_child(skeleton);
+			armature->add_child(skeleton);
 			skeleton->set_display_folded(true);
 			if (p_use_unique_names) {
 				skeleton->set_name("GeneralSkeleton");
@@ -693,29 +747,88 @@ Node3D *create_godot_moveable_model(
 				skeleton->set_name("Skeleton");
 			}
 
-			skeleton->add_bone("Root");
+			Quaternion root_quat = Quaternion::from_euler(Vector3(0.0, 0.0, 0.0));
+
+			int32_t root_idx = skeleton->add_bone("Root");
 			skeleton->set_bone_parent(0, current_parent);
-			skeleton->set_bone_rest(0, Transform3D(Basis(), Vector3()));
+			current_parent = root_idx;
+			skeleton->set_bone_rest(0, Transform3D());
 			skeleton->set_bone_pose_position(0, Vector3());
-			skeleton->set_bone_pose_rotation(0, Quaternion());
+			skeleton->set_bone_pose_rotation(0, root_quat);
 			skeleton->set_bone_pose_scale(0, Vector3(1.0, 1.0, 1.0));
 
-			CollisionShape3D* collision_shape = memnew(CollisionShape3D);
+			Node3D *scaled_root = memnew(Node3D);
+			scaled_root->set_name("ScaledRoot");
+			new_type_info->add_child(scaled_root);
+
+			StaticBody3D *avatar_bounds = memnew(StaticBody3D);
+			avatar_bounds->set_name("AvatarBounds");
+			avatar_bounds->set_collision_layer(0);
+			avatar_bounds->set_collision_mask(0);
+			scaled_root->add_child(avatar_bounds);
+
+			CollisionShape3D *collision_shape = memnew(CollisionShape3D);
 			collision_shape->set_display_folded(true);
 			collision_shape->set_name("BoundingBox");
 			
 			Ref<BoxShape3D> box_shape = memnew(BoxShape3D);
 			collision_shape->set_shape(box_shape);
 
-			new_type_info->add_child(collision_shape);
+			avatar_bounds->add_child(collision_shape);
+
+			for (int i = 0; i < 8; i++) {
+				Marker3D * bounds_marker = memnew(Marker3D);
+				String marker_name = "";
+				switch (i) {
+					case 0:
+						marker_name = "BoundsFrontBottomLeft";
+						break;
+					case 1:
+						marker_name = "BoundsFrontBottomRight";
+						break;
+					case 2:
+						marker_name = "BoundsFrontTopLeft";
+						break;
+					case 3:
+						marker_name = "BoundsFrontTopRight";
+						break;
+					case 4:
+						marker_name = "BoundsBackBottomLeft";
+						break;
+					case 5:
+						marker_name = "BoundsBackBottomRight";
+						break;
+					case 6:
+						marker_name = "BoundsBackTopLeft";
+						break;
+					case 7:
+						marker_name = "BoundsBackTopRight";
+						break;
+				}
+				bounds_marker->set_name(marker_name);
+				scaled_root->add_child(bounds_marker);
+			}
 
 			AnimationPlayer *animation_player = memnew(AnimationPlayer);
 			new_type_info->add_child(animation_player);
 			animation_player->set_name("AnimationPlayer");
+			animation_player->set_audio_max_polyphony(1);
+
+			AnimationNodeStateMachine *state_machine = memnew(AnimationNodeStateMachine);
+			AnimationTree *animation_tree = memnew(AnimationTree);
+			animation_tree->set_name("AnimationTree");
+			animation_tree->set_root_animation_node(state_machine);
+			new_type_info->add_child(animation_tree);
+			animation_tree->set_animation_player(animation_tree->get_path_to(animation_player));
+			animation_tree->set_active(false);
 
 			Node *animation_root_node = animation_player->get_node_or_null(animation_player->get_root_node());
 			ERR_FAIL_COND_V(!animation_root_node, nullptr);
+
 			NodePath skeleton_path = animation_root_node->get_path_to(skeleton);
+			if (p_use_unique_names) {
+				skeleton_path = NodePath("%GeneralSkeleton");
+			}
 			NodePath shape_path = animation_root_node->get_path_to(collision_shape);
 
 			Ref<AnimationLibrary> animation_library = memnew(AnimationLibrary);
@@ -728,8 +841,8 @@ Node3D *create_godot_moveable_model(
 			reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Vector3());
 			reset_animation->add_track(Animation::TYPE_ROTATION_3D);
 			reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":Root"));
-			reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Quaternion());
-			reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Quaternion());
+			reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, root_quat);
+			reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, root_quat);
 
 			reset_animation->add_track(Animation::TYPE_POSITION_3D);
 			reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(shape_path)));
@@ -744,15 +857,31 @@ Node3D *create_godot_moveable_model(
 
 			Vector<Ref<Animation>> godot_animations;
 
-			for (int anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+#define ANIMATION_GRAPH_SPACING 256.0
+			size_t grid_size = size_t(Math::floor(Math::sqrt(real_t(p_moveable_info.animations.size()))));
+			for (int32_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+				String animation_name = get_animation_name(p_type_info_id, anim_idx, p_level_format);
+				Ref<AnimationNodeAnimation> animation_node = memnew(AnimationNodeAnimation);
+				animation_node->set_animation(animation_name);
+
+				size_t x_pos = anim_idx % grid_size;
+				size_t y_pos = anim_idx / grid_size;
+
+				state_machine->add_node(animation_name, animation_node, Vector2(real_t(x_pos) * ANIMATION_GRAPH_SPACING, real_t(y_pos) * ANIMATION_GRAPH_SPACING));
+			}
+
+			for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 				Ref<Animation> godot_animation = memnew(Animation);
 				TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
 
-				String animation_name = get_animation_name(p_type_info_id, anim_idx);
+				String animation_name = get_animation_name(p_type_info_id, anim_idx, p_level_format);
+				Ref<AnimationNodeAnimation> animation_node = state_machine->get_node(animation_name);
+
+				godot_animation->set_name(animation_name);
 
 				godot_animations.push_back(godot_animation);
 
-				float animation_length = (float)((tr_animation.frames.size()) / TR_FPS) * tr_animation.frame_skip;
+				real_t animation_length = (real_t)((tr_animation.frames.size()) / TR_FPS) * tr_animation.frame_skip;
 
 				if (tr_animation.next_animation_number == p_moveable_info.animation_index + anim_idx && tr_animation.next_frame_number == tr_animation.frame_base) {
 					godot_animation->set_loop_mode(Animation::LOOP_LINEAR);
@@ -762,84 +891,24 @@ Node3D *create_godot_moveable_model(
 
 
 				godot_animation->set_length(animation_length);
-
-				int start_pos_x = 0;
-				int end_pos_x = 0;
-				int start_pos_z = 0;
-				int end_pos_z = 0;
 				
-				godot_animation->add_track(Animation::TYPE_POSITION_3D);
-				godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":Root"));
-
-				int root_position_track_idx = godot_animation->get_track_count() - 1;
-
-				godot_animation->add_track(Animation::TYPE_POSITION_3D);
-				godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path)));
-				int shape_position_track_idx = godot_animation->get_track_count() - 1;
-
-				godot_animation->add_track(Animation::TYPE_VALUE);
-				godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path) + ":shape:size"));
-				int shape_size_track_idx = godot_animation->get_track_count() - 1;
-
-				int frame_counter = 0;
-  				for (int frame_idx = 0; frame_idx < tr_animation.frames.size(); frame_idx++) {
-					for (int frame_skips = 0; frame_skips < tr_animation.frame_skip; frame_skips++) {
-						end_pos_x += (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
-						end_pos_z += (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
-						frame_counter++;
-					}
-
-					godot_animation->position_track_insert_key(root_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3(-double(end_pos_x) * TR_TO_GODOT_SCALE, 0.0, -double(end_pos_z) * TR_TO_GODOT_SCALE));
-					
-					TRAnimFrame frame = tr_animation.frames.get(frame_idx);
-
-					Vector3 gd_bbox_min = Vector3(frame.bounding_box.x_min * TR_TO_GODOT_SCALE, frame.bounding_box.y_min * TR_TO_GODOT_SCALE, frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
-					Vector3 gd_bbox_max = Vector3(frame.bounding_box.x_max * TR_TO_GODOT_SCALE, frame.bounding_box.y_max * TR_TO_GODOT_SCALE, frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
-
-					Vector3 gd_bbox_position = (gd_bbox_min + gd_bbox_max) / 2.0;
-					Vector3 gd_bbox_scale = gd_bbox_max - gd_bbox_min;
-
-					gd_bbox_position.y = -gd_bbox_position.y;
-					gd_bbox_position.z = -gd_bbox_position.z;
-					
-					godot_animation->position_track_insert_key(shape_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_position);
-					godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
-				}
-
-				TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number);
-				int next_frame_number = tr_animation.next_frame_number - tr_next_animation.frame_base;
-
-				// TODO: handle interpolation.
-
-				end_pos_x += (tr_next_animation.lateral_velocity + (tr_next_animation.lateral_acceleration * next_frame_number)) >> 16;
-				end_pos_z += (tr_next_animation.velocity + (tr_next_animation.acceleration * next_frame_number)) >> 16;
-
-				godot_animation->position_track_insert_key(root_position_track_idx, animation_length, Vector3(-double(end_pos_x) * TR_TO_GODOT_SCALE, 0.0, -double(end_pos_z) * TR_TO_GODOT_SCALE));
-				
-				godot_animation->add_track(Animation::TYPE_ROTATION_3D);
-				int root_rotation_track_idx = godot_animation->get_track_count() - 1;
-
-				godot_animation->track_set_path(root_rotation_track_idx, NodePath(String(skeleton_path) + ":Root"));
-				godot_animation->rotation_track_insert_key(root_rotation_track_idx, 0.0, Quaternion());
-				godot_animation->rotation_track_insert_key(root_rotation_track_idx, animation_length, Quaternion());
-				
-				animation_library->add_animation(get_animation_name(p_type_info_id, anim_idx), godot_animation);
+				animation_library->add_animation(get_animation_name(p_type_info_id, anim_idx, p_level_format), godot_animation);
 
 				Array animation_state_changes;
 
-				short state_change_index = tr_animation.state_change_index;
-				for (int state_change_offset_idx = 0; state_change_offset_idx < tr_animation.number_state_changes; state_change_offset_idx++) {
+				int16_t state_change_index = tr_animation.state_change_index;
+				for (size_t state_change_offset_idx = 0; state_change_offset_idx < tr_animation.number_state_changes; state_change_offset_idx++) {
 					ERR_FAIL_INDEX_V(state_change_index + state_change_offset_idx, p_types.animation_state_changes.size(), nullptr);
 
 					TRAnimationStateChange state_change = p_types.animation_state_changes.get(state_change_index + state_change_offset_idx);
 
 					Dictionary state_change_dict;
-					short target_animation_state = state_change.target_animation_state;
-					short dispatch_index = state_change.dispatch_index;
+					int16_t target_animation_state = state_change.target_animation_state;
+					int16_t dispatch_index = state_change.dispatch_index;
 					state_change_dict.set("target_animation_state", target_animation_state);
 
 					Array dispatches;
-					for (int dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
+					for (size_t dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
 						ERR_FAIL_INDEX_V(dispatch_index + dispatch_offset_idx, p_types.animation_dispatches.size(), nullptr);
 						TRAnimationDispatch dispatch = p_types.animation_dispatches.get(dispatch_index + dispatch_offset_idx);
 						if (dispatch.target_animation_number >= p_moveable_info.animation_index
@@ -854,10 +923,21 @@ Node3D *create_godot_moveable_model(
 							dispatch_dict.set("start_time", real_t(dispatch.start_frame - tr_animation.frame_base) / real_t(TR_FPS));
 							dispatch_dict.set("end_time", real_t(dispatch.end_frame - tr_animation.frame_base) / real_t(TR_FPS));
 
+							String target_animation_name = get_animation_name(p_type_info_id, dispatch.target_animation_number - p_moveable_info.animation_index, p_level_format);
+
 							dispatch_dict.set("target_animation_id", dispatch.target_animation_number - p_moveable_info.animation_index);
-							dispatch_dict.set("target_animation_name", get_animation_name(p_type_info_id, dispatch.target_animation_number - p_moveable_info.animation_index));
+							dispatch_dict.set("target_animation_name", get_animation_name(p_type_info_id, dispatch.target_animation_number - p_moveable_info.animation_index, p_level_format));
 							dispatch_dict.set("target_frame_number", dispatch.target_frame_number - new_tr_animation.frame_base);
 							dispatch_dict.set("target_frame_time", real_t(dispatch.target_frame_number - new_tr_animation.frame_base) / real_t(TR_FPS));
+
+							Ref<AnimationNodeStateMachineTransition> transition = memnew(AnimationNodeStateMachineTransition);
+							transition->set_switch_mode(AnimationNodeStateMachineTransition::SWITCH_MODE_IMMEDIATE);
+							transition->set_xfade_time(0.0);
+							if (animation_name != target_animation_name) {
+								if (!state_machine->has_transition(animation_name, target_animation_name)) {
+									state_machine->add_transition(animation_name, target_animation_name, transition);
+								}
+							}
 
 							dispatches.append(dispatch_dict);
 						}
@@ -869,16 +949,24 @@ Node3D *create_godot_moveable_model(
 					animation_state_changes.append(state_change_dict);
 				}
 
-				int audio_stream_track_idx = -1;
+				int32_t audio_stream_track_idx = -1;
 
 				Array command_list;
-				int command_offset = tr_animation.command_index;
+				int32_t command_offset = tr_animation.command_index;
 
 				TRPos position_offset;
 
-				for (int command_idx = 0; command_idx < tr_animation.number_commands; command_idx++) {
+				for (int32_t command_idx = 0; command_idx < tr_animation.number_commands; command_idx++) {
+					if (command_offset >= p_types.animation_commands.size()) {
+						continue;
+					}
+
 					switch (p_types.animation_commands.get(command_offset++).command) {
 						case 1: {
+							if (command_offset + 2 >= p_types.animation_commands.size()) {
+								continue;
+							}
+
 							// Set Position
 							position_offset.x = p_types.animation_commands.get(command_offset++).command;
 							position_offset.y = p_types.animation_commands.get(command_offset++).command;
@@ -894,14 +982,18 @@ Node3D *create_godot_moveable_model(
 							break;
 						}
 						case 2: {
+							if (command_offset + 1 >= p_types.animation_commands.size()) {
+								continue;
+							}
+
 							// Set Jump Velocity
 							int16_t vertical_velocity = p_types.animation_commands.get(command_offset++).command;
 							int16_t horizontal_velocity = p_types.animation_commands.get(command_offset++).command;
 
 							Dictionary dict;
 							dict.set("command_name", "set_jump_velocity");
-							dict.set("vertical_velocity", vertical_velocity);
-							dict.set("horizontal_velocity", horizontal_velocity);
+							dict.set("vertical_velocity", -vertical_velocity);
+							dict.set("horizontal_velocity", -horizontal_velocity);
 
 							command_list.push_back(dict);
 							break;
@@ -928,6 +1020,7 @@ Node3D *create_godot_moveable_model(
 								audio_stream_player = memnew(AudioStreamPlayer3D);
 								audio_stream_player->set_name("EntitySounds");
 								audio_stream_player->set_playback_type(AudioServer::PLAYBACK_TYPE_SAMPLE);
+								audio_stream_player->set_volume_db(-20.0);
 								new_type_info->add_child(audio_stream_player);
 							}
 
@@ -938,8 +1031,23 @@ Node3D *create_godot_moveable_model(
 								godot_animation->audio_track_set_use_blend(audio_stream_track_idx, false);
 							}
 
+							if (command_offset + 1 >= p_types.animation_commands.size()) {
+								continue;
+							}
+
 							uint16_t frame_number = p_types.animation_commands.get(command_offset++).command;
 							uint16_t sound_id = p_types.animation_commands.get(command_offset++).command;
+
+							if (p_level_format != TR1_PC) {
+								// Only handle land sounds for now...
+								if (sound_id & 0x4000) {
+									sound_id = sound_id & 0x3fff;
+								}
+
+								if (sound_id & 0x8000) {
+									continue;
+								}
+							}
 
 							if (sound_id < p_types.sound_map.size()) {
 								uint16_t remapped_sound_id = p_types.sound_map.get(sound_id);
@@ -961,8 +1069,8 @@ Node3D *create_godot_moveable_model(
 						}
 						case 6: {
 							// Flip effect
-							short frame_number = p_types.animation_commands.get(command_offset++).command;
-							short flipeffect_id = p_types.animation_commands.get(command_offset++).command;
+							int16_t frame_number = p_types.animation_commands.get(command_offset++).command;
+							int16_t flipeffect_id = p_types.animation_commands.get(command_offset++).command;
 
 							Dictionary dict;
 							dict.set("command_name", "play_flipeffect");
@@ -975,12 +1083,14 @@ Node3D *create_godot_moveable_model(
 					}
 				}
 
+				String next_animation_name = get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index, p_level_format);
+
 				godot_animation->set_meta("tr_animation_state_changes", animation_state_changes);
 				godot_animation->set_meta("tr_animation_current_animation_state", tr_animation.current_animation_state);
 				godot_animation->set_meta("tr_animation_frame_skip", tr_animation.frame_skip);
 				
 				godot_animation->set_meta("tr_animation_next_animation_id", tr_animation.next_animation_number - p_moveable_info.animation_index);
-				godot_animation->set_meta("tr_animation_next_animation_name", get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index));
+				godot_animation->set_meta("tr_animation_next_animation_name", get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index, p_level_format));
 				godot_animation->set_meta("tr_animation_next_frame", tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base);
 				godot_animation->set_meta("tr_animation_next_time", float(tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base) / real_t(TR_FPS));
 				
@@ -998,34 +1108,52 @@ Node3D *create_godot_moveable_model(
 
 				godot_animation->set_meta("tr_animation_command_list", command_list);
 
+				if (animation_name != next_animation_name) {
+					Ref<AnimationNodeStateMachineTransition> transition = memnew(AnimationNodeStateMachineTransition);
+					transition->set_switch_mode(AnimationNodeStateMachineTransition::SWITCH_MODE_AT_END);
+					transition->set_xfade_time(0.0);
+					if (animation_name != next_animation_name) {
+						if (!state_machine->has_transition(animation_name, next_animation_name)) {
+							state_machine->add_transition(animation_name, next_animation_name, transition);
+						}
+					}
+				}
+
 				animation_position_offsets.append(position_offset);
 			}
 
 			animation_player->add_animation_library("", animation_library);
 			animation_player->set_current_animation("RESET");
-			if (p_use_unique_names) {
-				animation_player->set_root_motion_track(NodePath("GeneralSkeleton:Root"));
-			} else {
-				animation_player->set_root_motion_track(NodePath("Skeleton:Root"));
-			}
 
-			for (int i = 0; i < p_moveable_info.mesh_count; i++) {
-				int offset_mesh_index = p_moveable_info.mesh_index + i;
+			String root_motion_path_string = String(skeleton_path) + ":Root";
+			animation_player->set_root_motion_track(root_motion_path_string);
+
+			real_t motion_scale = 1.0;
+
+			Vector<Transform3D> bone_pre_transforms;
+			Vector<Transform3D> bone_post_transforms;
+			Vector<Transform3D> mesh_transforms;
+			HashMap<int32_t, Basis> dummy_bone_global_rotations;
+
+			mesh_transforms.resize(p_moveable_info.mesh_count);
+
+			for (size_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
+				int32_t offset_mesh_index = p_moveable_info.mesh_index + mesh_idx;
 				if (offset_mesh_index < p_meshes.size()) {
-					Vector3 origin_offset;
+					Transform3D transform_offset;
 
-					if (i > 0) {
+					if (mesh_idx > 0) {
 						ERR_FAIL_COND_V(p_types.mesh_tree_buffer.size() < (offset_bone_index + 4), nullptr);
 
-						int flags = p_types.mesh_tree_buffer.get(offset_bone_index++);
-						int x = p_types.mesh_tree_buffer.get(offset_bone_index++);
-						int y = p_types.mesh_tree_buffer.get(offset_bone_index++);
-						int z = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int32_t flags = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int32_t x = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int32_t y = p_types.mesh_tree_buffer.get(offset_bone_index++);
+						int32_t z = p_types.mesh_tree_buffer.get(offset_bone_index++);
 
-						origin_offset = Vector3(
+						transform_offset = Transform3D(Basis(), Vector3(
 							x * TR_TO_GODOT_SCALE,
 							y * -TR_TO_GODOT_SCALE,
-							z * -TR_TO_GODOT_SCALE);
+							z * -TR_TO_GODOT_SCALE));
 
 						if (flags & TR_BONE_POP) {
 							ERR_FAIL_COND_V(bone_stack.size() <= 0, nullptr);
@@ -1038,70 +1166,269 @@ Node3D *create_godot_moveable_model(
 						}
 					} else {
 						bone_stack.push_back(0);
+						if (does_overwrite_mesh_rotation(p_type_info_id, p_level_format)) {
+							transform_offset = Transform3D().rotated(Vector3(0.0, 1.0, 0.0), Math_PI);
+						}
 					}
 
-					String bone_name = get_bone_name(p_type_info_id, i, p_level_format);
+					String bone_name = get_bone_name(p_type_info_id, mesh_idx, p_level_format);
 
-					skeleton->add_bone(bone_name);
-					skeleton->set_bone_parent(i + 1, current_parent + 1);
-					skeleton->set_bone_rest(i + 1, Transform3D(Basis(), origin_offset));
-					skeleton->set_bone_pose_position(i + 1, origin_offset);
+					int32_t valid_parent = current_parent;
+					if (does_have_dummy_bone(p_type_info_id, mesh_idx, p_level_format)) {
+						DummyBoneInfo dummy_bone = get_dummy_bone_info(p_type_info_id, mesh_idx, p_level_format);
+						int32_t dummy_bone_idx = skeleton->add_bone(dummy_bone.name);
+						skeleton->set_bone_parent(dummy_bone_idx, valid_parent);
+
+						transform_offset.origin += dummy_bone.offset * TR_TO_GODOT_SCALE;
+
+						skeleton->set_bone_rest(dummy_bone_idx, transform_offset);
+						skeleton->set_bone_pose(dummy_bone_idx, transform_offset);
+
+						transform_offset = Transform3D();
+						transform_offset.origin -= dummy_bone.offset * TR_TO_GODOT_SCALE;
+						
+						valid_parent = dummy_bone_idx;
+
+						dummy_bone_global_rotations[dummy_bone_idx] = dummy_bone.rotation;
+					}
+
+					int32_t bone_idx = skeleton->add_bone(bone_name);
+					skeleton->set_bone_parent(bone_idx, valid_parent);
+					skeleton->set_bone_rest(bone_idx, transform_offset);
+					skeleton->set_bone_pose(bone_idx, transform_offset);
+
+					mesh_to_bone_mapping[mesh_idx] = bone_idx;
+					bone_to_mesh_mapping[bone_idx] = mesh_idx;
+
+					mesh_transforms.set(mesh_idx, transform_offset);
+
+					current_parent = bone_idx;
+				}
+			}
+
+			bone_pre_transforms.resize(skeleton->get_bone_count());
+			bone_post_transforms.resize(skeleton->get_bone_count());
+
+			if (does_overwrite_mesh_rotation(p_type_info_id, p_level_format)) {
+				for (size_t bone_idx = 0; bone_idx < skeleton->get_bone_count(); bone_idx++) {
+					if (bone_idx > 0) {
+						Transform3D diff;
+						if (bone_to_mesh_mapping.has(bone_idx)) {
+							diff = skeleton->get_bone_global_rest(bone_idx).get_basis().inverse() * get_overwritten_mesh_rotation(p_type_info_id, bone_to_mesh_mapping[bone_idx], p_level_format);
+						} else {
+							if (dummy_bone_global_rotations.has(bone_idx)) {
+								diff = skeleton->get_bone_global_rest(bone_idx).get_basis().inverse() * dummy_bone_global_rotations[bone_idx];
+							}
+						}
+
+						Transform3D new_pose = skeleton->get_bone_pose(bone_idx) * diff;
+						Transform3D new_rest = skeleton->get_bone_rest(bone_idx) * diff;
+
+						skeleton->set_bone_pose(bone_idx, new_pose);
+						skeleton->set_bone_rest(bone_idx, new_rest);
+
+						bone_post_transforms.set(bone_idx, diff);
+
+						PackedInt32Array children = skeleton->get_bone_children(bone_idx);
+						for (int32_t c : children) {
+							skeleton->set_bone_pose(c, diff.affine_inverse() * skeleton->get_bone_pose(c));
+							skeleton->set_bone_rest(c, diff.affine_inverse() * skeleton->get_bone_rest(c));
+
+							bone_pre_transforms.set(c, diff.affine_inverse());
+						}
+					}
+				}
+			}
+
+
+			for (size_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
+				int32_t offset_mesh_index = p_moveable_info.mesh_index + mesh_idx;
+				int32_t bone_idx = mesh_to_bone_mapping[mesh_idx];
+
+				if (offset_mesh_index < p_meshes.size()) {
+					Transform3D transform_offset = mesh_transforms.get(mesh_idx);
+
+					String bone_name = get_bone_name(p_type_info_id, mesh_idx, p_level_format);
 
 					if (p_moveable_info.animations.size()) {
-						TRAnimation tr_animation = p_moveable_info.animations.get(0);
-						TRAnimFrame anim_frame = tr_animation.frames[0];
-						TRTransform bone_transform = anim_frame.transforms.get(i);
+						TRAnimation reference_tr_animation = p_moveable_info.animations.get(0);
+						if (reference_tr_animation.frames.size() > 0) {
+							TRAnimFrame reference_anim_frame = reference_tr_animation.frames[0];
+							TRTransform reference_bone_transform = reference_anim_frame.transforms.get(mesh_idx);
 
-						Vector3 frame_origin = Vector3(
-							bone_transform.pos.x * TR_TO_GODOT_SCALE,
-							bone_transform.pos.y * -TR_TO_GODOT_SCALE,
-							bone_transform.pos.z * -TR_TO_GODOT_SCALE);
+							Vector3 frame_origin = Vector3(
+								reference_bone_transform.pos.x * TR_TO_GODOT_SCALE,
+								reference_bone_transform.pos.y * -TR_TO_GODOT_SCALE,
+								reference_bone_transform.pos.z * -TR_TO_GODOT_SCALE);
 
-						float rot_y_deg = (float)(bone_transform.rot.y) / 16384.0f * -90.0f;
-						float rot_x_deg = (float)(bone_transform.rot.x) / 16384.0f * 90.0f;
-						float rot_z_deg = (float)(bone_transform.rot.z) / 16384.0f * -90.0f;
+							if (mesh_idx == 0) {
+								bool uses_motion_scale = does_type_use_motion_scale(p_type_info_id, p_level_format);
+								if (uses_motion_scale) {
+									motion_scale = abs((transform_offset.origin + frame_origin).y);
+									if (motion_scale > 0.0) {
+										skeleton->set_motion_scale(motion_scale);
+									}
+								}
 
-						float rot_y_rad = Math::deg_to_rad(rot_y_deg);
-						float rot_x_rad = Math::deg_to_rad(rot_x_deg);
-						float rot_z_rad = Math::deg_to_rad(rot_z_deg);
+								scaled_root->set_scale(Vector3(motion_scale, motion_scale, motion_scale));
+							}
 
-						Basis rotation_basis;
-						rotation_basis.rotate(Vector3(rot_x_rad, rot_y_rad, rot_z_rad), EulerOrder::YXZ);
+							Transform3D reset_final_transform = Transform3D(transform_offset.basis, (transform_offset.origin + frame_origin) * Vector3(1.0, 1.0 / motion_scale, 1.0));
+							reset_final_transform = bone_pre_transforms.get(bone_idx) * reset_final_transform * bone_post_transforms.get(bone_idx);
 
-						reset_animation->add_track(Animation::TYPE_POSITION_3D);
-						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path )+ ":" + bone_name));
-						reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 0.0, origin_offset + frame_origin);
-						reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 1.0, origin_offset + frame_origin);
-						reset_animation->add_track(Animation::TYPE_ROTATION_3D);
-						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
-						reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Quaternion());
-						reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Quaternion());
-					} else {
-						reset_animation->add_track(Animation::TYPE_POSITION_3D);
-						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
-						reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 0.0, origin_offset);
-						reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 1.0, origin_offset);
-						reset_animation->add_track(Animation::TYPE_ROTATION_3D);
-						reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
-						reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Quaternion());
-						reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Quaternion());
+							if (mesh_idx == 0) {
+								if (does_overwrite_mesh_rotation(p_type_info_id, p_level_format)) {
+									reset_final_transform.origin.x = 0.0;
+									reset_final_transform.origin.z = 0.0;
+								}
+								else {
+									reset_final_transform = Transform3D().rotated(Vector3(0.0, 1.0, 0.0), Math_PI) * reset_final_transform;
+								}
+							}
+
+							reset_animation->add_track(Animation::TYPE_POSITION_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 0.0, reset_final_transform.origin);
+							reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 1.0, reset_final_transform.origin);
+							reset_animation->add_track(Animation::TYPE_ROTATION_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, reset_final_transform.basis.get_rotation_quaternion());
+							reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, reset_final_transform.basis.get_rotation_quaternion());
+							reset_animation->add_track(Animation::TYPE_SCALE_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Vector3(1.0, 1.0, 1.0));
+							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Vector3(1.0, 1.0, 1.0));
+
+						}
+						else {
+							if (mesh_idx == 0) {
+								bool uses_motion_scale = does_type_use_motion_scale(p_type_info_id, p_level_format);
+								if (uses_motion_scale) {
+									motion_scale = abs(transform_offset.origin.y);
+									if (motion_scale > 0.0) {
+										skeleton->set_motion_scale(motion_scale);
+									}
+								}
+							}
+
+							Transform3D reset_final_transform = Transform3D(transform_offset.basis, (transform_offset.origin) * Vector3(1.0, 1.0 / motion_scale, 1.0));
+
+							reset_final_transform = bone_pre_transforms.get(bone_idx) * reset_final_transform * bone_post_transforms.get(bone_idx);
+
+							reset_animation->add_track(Animation::TYPE_POSITION_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 0.0, reset_final_transform.origin);
+							reset_animation->position_track_insert_key(reset_animation->get_track_count() - 1, 1.0, reset_final_transform.origin);
+							reset_animation->add_track(Animation::TYPE_ROTATION_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 0.0, reset_final_transform.basis.get_rotation_quaternion());
+							reset_animation->rotation_track_insert_key(reset_animation->get_track_count() - 1, 1.0, reset_final_transform.basis.get_rotation_quaternion());
+							reset_animation->add_track(Animation::TYPE_SCALE_3D);
+							reset_animation->track_set_path(reset_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":" + bone_name));
+							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Vector3(1.0, 1.0, 1.0));
+							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Vector3(1.0, 1.0, 1.0));
+						}
 					}
 
-					for (int anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+					for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 						TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
 						Ref<Animation> godot_animation = godot_animations[anim_idx];
 
-						int extra_frames = 1;
+						if (mesh_idx == 0) {
+							real_t animation_length = godot_animation->get_length();
 
-						godot_animation->add_track(Animation::TYPE_POSITION_3D);
-						int32_t position_track_idx = godot_animation->get_track_count() - 1;
-						godot_animation->track_set_path(position_track_idx, NodePath(String(skeleton_path) + ":" + bone_name));
+							int32_t start_pos_x = 0;
+							int32_t end_pos_x = 0;
+							int32_t start_pos_z = 0;
+							int32_t end_pos_z = 0;
+
+							godot_animation->add_track(Animation::TYPE_POSITION_3D);
+							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(skeleton_path) + ":Root"));
+
+							int32_t root_position_track_idx = godot_animation->get_track_count() - 1;
+
+							godot_animation->add_track(Animation::TYPE_POSITION_3D);
+							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path)));
+							int32_t shape_position_track_idx = godot_animation->get_track_count() - 1;
+
+							godot_animation->add_track(Animation::TYPE_VALUE);
+							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path) + ":shape:size"));
+							int32_t shape_size_track_idx = godot_animation->get_track_count() - 1;
+
+							int32_t frame_counter = 0;
+							int32_t frame_skips = 1;
+
+							end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
+							end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
+
+							for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size(); frame_idx++) {
+								if (frame_idx == 0 || tr_animation.acceleration != 0 || tr_animation.lateral_acceleration != 0) {
+									godot_animation->position_track_insert_key(root_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+								}
+
+								for (; frame_skips < tr_animation.frame_skip; frame_skips++) {
+									end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
+									end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
+									frame_counter++;
+								}
+								frame_skips = 0;
+
+								TRAnimFrame frame = tr_animation.frames.get(frame_idx);
+
+								Vector3 gd_bbox_min = Vector3(frame.bounding_box.x_min * TR_TO_GODOT_SCALE, frame.bounding_box.y_min * TR_TO_GODOT_SCALE, frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
+								Vector3 gd_bbox_max = Vector3(frame.bounding_box.x_max * TR_TO_GODOT_SCALE, frame.bounding_box.y_max * TR_TO_GODOT_SCALE, frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
+
+								Vector3 gd_bbox_position = (gd_bbox_min + gd_bbox_max) / 2.0;
+								Vector3 gd_bbox_scale = gd_bbox_max - gd_bbox_min;
+
+								gd_bbox_position.x = -gd_bbox_position.x;
+								gd_bbox_position.y = -gd_bbox_position.y;
+								gd_bbox_position.z = gd_bbox_position.z;
+
+								gd_bbox_position.x /= motion_scale;
+								gd_bbox_position.y /= motion_scale;
+								gd_bbox_position.z /= motion_scale;
+
+								gd_bbox_scale.x /= motion_scale;
+								gd_bbox_scale.y /= motion_scale;
+								gd_bbox_scale.z /= motion_scale;
+
+								godot_animation->position_track_insert_key(shape_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_position);
+								godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
+							}
+
+							TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number);
+							int32_t next_frame_number = tr_animation.next_frame_number - tr_next_animation.frame_base;
+
+							// TODO: handle interpolation.
+
+							end_pos_x -= ((tr_next_animation.lateral_velocity + (tr_next_animation.lateral_acceleration * next_frame_number)) >> 16);
+							end_pos_z -= ((tr_next_animation.velocity + (tr_next_animation.acceleration * next_frame_number)) >> 16);
+
+							godot_animation->position_track_insert_key(root_position_track_idx, animation_length, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+
+							godot_animation->add_track(Animation::TYPE_ROTATION_3D);
+							int32_t root_rotation_track_idx = godot_animation->get_track_count() - 1;
+
+							godot_animation->track_set_path(root_rotation_track_idx, NodePath(String(skeleton_path) + ":Root"));
+							godot_animation->rotation_track_insert_key(root_rotation_track_idx, 0.0, Quaternion());
+							godot_animation->rotation_track_insert_key(root_rotation_track_idx, animation_length, Quaternion());
+						}
+
+						int32_t extra_frames = 1;
+
+						int32_t position_track_idx = -1;
+						if (mesh_idx == 0) {
+							godot_animation->add_track(Animation::TYPE_POSITION_3D);
+							position_track_idx = godot_animation->get_track_count() - 1;
+							godot_animation->track_set_path(position_track_idx, NodePath(String(skeleton_path) + ":" + bone_name));
+						}
 
 						godot_animation->add_track(Animation::TYPE_ROTATION_3D);
 						int32_t rotation_track_idx = godot_animation->get_track_count() - 1;
 						godot_animation->track_set_path(rotation_track_idx, NodePath(String(skeleton_path) + ":" + bone_name));
 
-						for (int frame_idx = 0; frame_idx < tr_animation.frames.size() + extra_frames; frame_idx++) {
+						for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size() + extra_frames; frame_idx++) {
 
 							real_t interpolation = 0.0;
 							TRAnimFrame first_anim_frame;
@@ -1116,7 +1443,7 @@ Node3D *create_godot_moveable_model(
 									TRAnimation tr_animation_current = tr_animation;
 									TRAnimation tr_next_animation = p_types.animations.get(tr_animation_current.next_animation_number);
 									
-									int attempts_remaining = 128;
+									int32_t attempts_remaining = 128;
 									while (tr_next_animation.frames.size() == 0) {
 										ERR_FAIL_INDEX_V(tr_next_animation.next_animation_number, p_types.animations.size(), nullptr);
 										tr_animation_current = tr_next_animation;
@@ -1126,8 +1453,8 @@ Node3D *create_godot_moveable_model(
 										ERR_FAIL_COND_V(attempts_remaining <= 0, nullptr);
 									}
 
-									int next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
-									int next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
+									int32_t next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
+									int32_t next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
 
 									if (anim_idx == tr_animation_current.next_animation_number && tr_animation.next_frame_number == tr_animation.frame_end) {
 										interpolation = 0.0;
@@ -1135,7 +1462,7 @@ Node3D *create_godot_moveable_model(
 										second_anim_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
 									} else {
 										if (tr_next_animation.frame_skip > 0) {
-											int keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
+											int32_t keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
 											ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), nullptr);
 											first_anim_frame = tr_next_animation.frames[keyframe_idx];
 											second_anim_frame = tr_next_animation.frames[keyframe_idx];
@@ -1160,7 +1487,7 @@ Node3D *create_godot_moveable_model(
 										}
 									}
 								}
-								if (i == 0) {
+								if (mesh_idx == 0) {
 									TRTransform first_hips_transform = second_anim_frame.transforms.get(0);
 									TRTransform second_hips_transform = second_anim_frame.transforms.get(0);
 
@@ -1172,45 +1499,69 @@ Node3D *create_godot_moveable_model(
 									second_hips_transform.pos.y += (animation_position_offsets.get(anim_idx).y);
 									second_hips_transform.pos.z += (animation_position_offsets.get(anim_idx).z);
 
-									first_anim_frame.transforms.set(i, first_hips_transform);
-									second_anim_frame.transforms.set(i, second_hips_transform);
+									first_anim_frame.transforms.set(mesh_idx, first_hips_transform);
+									second_anim_frame.transforms.set(mesh_idx, second_hips_transform);
 								}
 							} else {
 								ERR_FAIL_INDEX_V(frame_idx, tr_animation.frames.size(), nullptr);
 								first_anim_frame = second_anim_frame = tr_animation.frames[frame_idx];
 							}
 
-							Transform3D first_transform = tr_transform_to_godot_transform(first_anim_frame.transforms.get(i));
-							Transform3D second_transform = tr_transform_to_godot_transform(second_anim_frame.transforms.get(i));
+							Transform3D first_transform;
+							Transform3D second_transform;
+							if (mesh_idx < first_anim_frame.transforms.size()) {
+								first_transform = tr_transform_to_godot_transform(first_anim_frame.transforms.get(mesh_idx));
+							}
+							if (mesh_idx < second_anim_frame.transforms.size()) {
+								second_transform = tr_transform_to_godot_transform(second_anim_frame.transforms.get(mesh_idx));
+							}
 
-							Transform3D final_transform = first_transform.interpolate_with(second_transform, interpolation);
+							Transform3D pre_fix;
+							if (mesh_idx == 0) {
+								pre_fix = pre_fix.rotated(Vector3(0.0, 1.0, 0.0), Math_PI);
+							}
 
-							godot_animation->position_track_insert_key(position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, origin_offset + final_transform.origin);
-							godot_animation->rotation_track_insert_key(rotation_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.basis.get_quaternion());
+							Transform3D final_transform = pre_fix * first_transform.interpolate_with(second_transform, interpolation);
+							final_transform.origin = ((transform_offset.origin + final_transform.origin) * Vector3(1.0, 1.0 / motion_scale, 1.0));
+
+							final_transform = bone_pre_transforms.get(bone_idx) * final_transform * bone_post_transforms.get(bone_idx);
+
+							if (position_track_idx >= 0) {
+								godot_animation->position_track_insert_key(position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.origin);
+							}
+							if (rotation_track_idx >= 0) {
+								godot_animation->rotation_track_insert_key(rotation_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.basis.get_quaternion());
+							}
 						}
 					}
 
-					Ref<ArrayMesh> mesh = p_meshes.get(offset_mesh_index);
-					MeshInstance3D* mi = memnew(MeshInstance3D);
 
-					BoneAttachment3D* bone_attachment = memnew(BoneAttachment3D);
-					bone_attachment->set_name(get_bone_name(p_type_info_id, i, p_level_format) + "_attachment");
+					Ref<ArrayMesh> mesh = p_meshes.get(offset_mesh_index);
+					MeshInstance3D *mi = memnew(MeshInstance3D);
+
+					BoneAttachment3D *bone_attachment = memnew(BoneAttachment3D);
+					bone_attachment->set_name(get_bone_name(p_type_info_id, mesh_idx, p_level_format) + "_attachment");
 					skeleton->add_child(bone_attachment);
-					bone_attachment->set_bone_idx(i+1);
+					bone_attachment->set_bone_idx(mesh_to_bone_mapping[mesh_idx]);
 					bone_attachment->add_child(mi);
 
 					mi->set_mesh(mesh);
 					mi->set_name(String("MeshInstance_") + itos(offset_mesh_index));
 					mi->set_layer_mask(1 << 1); // Dynamic
+					mi->set_gi_mode(GeometryInstance3D::GI_MODE_DYNAMIC);
 
-					current_parent = i;
+					if (does_overwrite_mesh_rotation(p_type_info_id, p_level_format)) {
+						mi->set_transform(get_overwritten_mesh_rotation(p_type_info_id, mesh_idx, p_level_format).inverse() * Transform3D().rotated(Vector3(0.0, 1.0, 0.0), Math_PI).basis);
+					}
+
+					mesh_instances.append(mi);
 				}
 			}
 		} else {
-			int offset_mesh_index = p_moveable_info.mesh_index;
+			int32_t offset_mesh_index = p_moveable_info.mesh_index;
 			if (offset_mesh_index < p_meshes.size()) {
 				Ref<ArrayMesh> mesh = p_meshes.get(offset_mesh_index);
-				MeshInstance3D* mi = memnew(MeshInstance3D);
+				MeshInstance3D *mi = memnew(MeshInstance3D);
 
 				new_type_info->add_child(mi);
 
@@ -1220,22 +1571,23 @@ Node3D *create_godot_moveable_model(
 		}
 	}
 
+
 	return new_type_info;
 }
 
-const int TR_FRAME_BOUND_MIN_X = 0;
-const int TR_FRAME_BOUND_MAX_X = 1;
-const int TR_FRAME_BOUND_MIN_Y = 2;
-const int TR_FRAME_BOUND_MAX_Y = 3;
-const int TR_FRAME_BOUND_MIN_Z = 4;
-const int TR_FRAME_BOUND_MAX_Z = 5;
-const int TR_FRAME_POS_X = 6;
-const int TR_FRAME_POS_Y = 7;
-const int TR_FRAME_POS_Z = 8;
-const int TR_FRAME_ROT = 10;
+const int32_t TR_FRAME_BOUND_MIN_X = 0;
+const int32_t TR_FRAME_BOUND_MAX_X = 1;
+const int32_t TR_FRAME_BOUND_MIN_Y = 2;
+const int32_t TR_FRAME_BOUND_MAX_Y = 3;
+const int32_t TR_FRAME_BOUND_MIN_Z = 4;
+const int32_t TR_FRAME_BOUND_MAX_Z = 5;
+const int32_t TR_FRAME_POS_X = 6;
+const int32_t TR_FRAME_POS_Y = 7;
+const int32_t TR_FRAME_POS_Z = 8;
+const int32_t TR_FRAME_ROT = 10;
 
 Vector<Node3D *> create_nodes_for_moveables(
-	HashMap<int,
+	HashMap<int32_t,
 	TRMoveableInfo> p_type_info_map,
 	TRTypes p_types,
 	Vector<Ref<ArrayMesh>> p_meshes,
@@ -1243,9 +1595,9 @@ Vector<Node3D *> create_nodes_for_moveables(
 	TRLevelFormat p_level_format) {
 	Vector<Node3D *> types;
 
-	for (int type_id = 0; type_id < 4096; type_id++) {
+	for (int32_t type_id = 0; type_id < 4096; type_id++) {
 		if (p_type_info_map.has(type_id)) {
-			Node3D* new_node = create_godot_moveable_model(type_id, p_type_info_map[type_id], p_types, p_meshes, p_samples, p_level_format, false);
+			Node3D *new_node = create_godot_moveable_model(type_id, p_type_info_map[type_id], p_types, p_meshes, p_samples, p_level_format, false);
 			if (new_node) {
 				types.push_back(new_node);
 			}
@@ -1260,18 +1612,21 @@ Vector<TRTextureInfo> read_tr_texture_infos(Ref<TRFileAccess> p_file, TRLevelFor
 	Vector<TRTextureInfo> texture_infos;
 	ERR_FAIL_COND_V(texture_count > 8192, Vector<TRTextureInfo>());
 
-	for (int i = 0; i < texture_count; i++) {
+	for (int32_t i = 0; i < texture_count; i++) {
 		TRTextureInfo texture_info;
 
 		texture_info.draw_type = p_file->get_s16();
-		texture_info.texture_page = p_file->get_s16();
+
+		uint16_t texture_page_and_flag = p_file->get_s16();
+		texture_info.texture_page = texture_page_and_flag & 0x7fff;
+
 		if (p_level_format == TR4_PC) {
 			texture_info.extra_flags = p_file->get_s16();
 		} else {
 			texture_info.extra_flags = 0;
 		}
 
-		for (int j = 0; j < 4; j++) {
+		for (int32_t j = 0; j < 4; j++) {
 			texture_info.uv[j].u = p_file->get_s16();
 			texture_info.uv[j].v = p_file->get_s16();
 		}
@@ -1300,7 +1655,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	// Mesh Buffer
 	int32_t mesh_data_buffer_size = p_file->get_s32();
 	// Save position of the start of mesh buffer
-	int mesh_buffer_pos = p_file->get_position();
+	int32_t mesh_buffer_pos = p_file->get_position();
 	// Skip the buffer
 	p_file->seek(p_file->get_position() + mesh_data_buffer_size * sizeof(uint16_t));
 
@@ -1309,9 +1664,9 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	PackedInt32Array mesh_ptr_buffer = p_file->get_buffer_int32(mesh_ptr_count);
 
 	// Save position of the end of the mesh pointer buffer
-	int mesh_ptr_buffer_end = p_file->get_position();
+	int32_t mesh_ptr_buffer_end = p_file->get_position();
 
-	for (int i = 0; i < mesh_ptr_count; i++) {
+	for (int32_t i = 0; i < mesh_ptr_count; i++) {
 		int32_t ptr = mesh_ptr_buffer[i];
 		p_file->seek(mesh_buffer_pos + ptr);
 
@@ -1323,28 +1678,28 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	// Animations
 	int32_t anim_count = p_file->get_s32();
-	for (int i = 0; i < anim_count; i++) {
+	for (int32_t i = 0; i < anim_count; i++) {
 		TRAnimation animation = read_tr_animation(p_file, p_level_format);
 		tr_types.animations.push_back(animation);
 	}
 
 	// Animation State Changes
 	int32_t animation_change_count = p_file->get_s32();
-	for (int i = 0; i < animation_change_count; i++) {
+	for (int32_t i = 0; i < animation_change_count; i++) {
 		TRAnimationStateChange state_change = read_tr_animation_state_change(p_file, p_level_format);
 		tr_types.animation_state_changes.push_back(state_change);
 	}
 
 	// Animation Dispatches
 	int32_t animation_dispatch_count = p_file->get_s32();
-	for (int i = 0; i < animation_dispatch_count; i++) {
+	for (int32_t i = 0; i < animation_dispatch_count; i++) {
 		TRAnimationDispatch dispatch = read_tr_animation_dispatch(p_file, p_level_format);
 		tr_types.animation_dispatches.push_back(dispatch);
 	}
 
 	// Animation Commands
 	int32_t anim_command_count = p_file->get_s32();
-	for (int i = 0; i < anim_command_count; i++) {
+	for (int32_t i = 0; i < anim_command_count; i++) {
 		TRAnimationCommand command = read_tr_animation_command(p_file, p_level_format);
 		tr_types.animation_commands.push_back(command);
 	}
@@ -1361,8 +1716,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	Vector<int32_t> id_list;
 	Vector<TRMoveableInfo> moveable_infos;
 	int32_t moveable_info_count = p_file->get_s32();
-
-	for (int i = 0; i < moveable_info_count; i++) {
+	for (int32_t i = 0; i < moveable_info_count; i++) {
 		int32_t type_info_id = p_file->get_u32();
 
 		TRMoveableInfo moveable_info;
@@ -1381,29 +1735,35 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	}
 
 	// Calculate animation count (should work fine in retail games, but may not work for custom levels)
-	for (int i = 0; i < moveable_infos.size() - 1; i++) {
+	for (int32_t i = 0; i < moveable_infos.size() - 1; i++) {
 		TRMoveableInfo moveable_info = moveable_infos[i];
 
 		if (moveable_infos[i].animation_index >= 0) {
-			moveable_info.animation_count = moveable_infos[i + 1].animation_index - moveable_infos[i].animation_index;
+			if (moveable_infos[i + 1].animation_index > moveable_infos[i].animation_index) {
+				moveable_info.animation_count = moveable_infos[i + 1].animation_index - moveable_infos[i].animation_index;
+			}
 		}
 		moveable_infos.set(i, moveable_info);
 	}
 
 	// Animation setup (we're skipping the last model because we don't know the amount of animations it has)
-	for (int i = 0; i < moveable_infos.size() - 1; i++) {
+	for (int32_t i = 0; i < moveable_infos.size() - 1; i++) {
 		TRMoveableInfo moveable_info = moveable_infos[i];
 
-		for (int animation_idx = 0; animation_idx < moveable_info.animation_count; animation_idx++) {
+		for (size_t animation_idx = 0; animation_idx < moveable_info.animation_count; animation_idx++) {
+			if (moveable_info.animation_index + animation_idx >= tr_types.animations.size()) {
+				continue;
+			}
+
 			TRAnimation animation = tr_types.animations[moveable_info.animation_index + animation_idx];
 			ERR_FAIL_COND_V(animation.frame_skip <= 0, TRTypes());
 
-			int frame_count = (animation.frame_end - animation.frame_base) / animation.frame_skip;
+			int32_t frame_count = (animation.frame_end - animation.frame_base) / animation.frame_skip;
 			frame_count++;
 			
-			int frame_ptr = animation.frame_offset;
+			int32_t frame_ptr = animation.frame_offset;
 
-			for (int frame_idx = 0; frame_idx < frame_count; frame_idx++) {				
+			for (size_t frame_idx = 0; frame_idx < frame_count; frame_idx++) {
 				// This may be wrong
 
 				if (animation.frame_size > 0) {
@@ -1413,7 +1773,10 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 				TRBoundingBox bounding_box;
 				
 				int16_t* bounds[] = { &bounding_box.x_min, &bounding_box.x_max, &bounding_box.y_min, &bounding_box.y_max, &bounding_box.z_min, &bounding_box.z_max };
-				for (int j = 0; j < sizeof(bounds) / sizeof(bounds[0]); j++) {
+				for (int32_t j = 0; j < sizeof(bounds) / sizeof(bounds[0]); j++) {
+					if (frame_ptr + 2 >= anim_frame_buffer.size()) {
+						continue;
+					}
 					uint8_t first = anim_frame_buffer[frame_ptr++];
 					uint8_t second = anim_frame_buffer[frame_ptr++];
 
@@ -1423,7 +1786,10 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 				TRPos pos;
 
 				int32_t* coords[] = { &pos.x, &pos.y, &pos.z };
-				for (int j = 0; j < sizeof(coords) / sizeof(coords[0]); j++) {
+				for (int32_t j = 0; j < sizeof(coords) / sizeof(coords[0]); j++) {
+					if (frame_ptr + 2 >= anim_frame_buffer.size()) {
+						continue;
+					}
 					uint8_t first = anim_frame_buffer[frame_ptr++];
 					uint8_t second = anim_frame_buffer[frame_ptr++];
 
@@ -1432,6 +1798,9 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 				int16_t num_rotations = moveable_info.mesh_count;
 				if (p_level_format == TR1_PC) {
+					if (frame_ptr + 2 >= anim_frame_buffer.size()) {
+						continue;
+					}
 					uint8_t first = anim_frame_buffer[frame_ptr++];
 					uint8_t second = anim_frame_buffer[frame_ptr++];
 
@@ -1440,8 +1809,12 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 				TRAnimFrame anim_frame;
 
-				for (int j = 0; j < num_rotations; j++) {
+				for (int32_t j = 0; j < num_rotations; j++) {
 					TRTransform bone_transform;
+
+					if (frame_ptr + 2 >= anim_frame_buffer.size()) {
+						continue;
+					}
 
 					uint8_t rot_1 = anim_frame_buffer[frame_ptr++];
 					uint8_t rot_2 = anim_frame_buffer[frame_ptr++];
@@ -1450,6 +1823,10 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 					uint16_t flags = (rot_16_a & 0xc000) >> 14;
 
 					if (p_level_format == TR1_PC || flags == 0) {
+						if (frame_ptr + 2 >= anim_frame_buffer.size()) {
+							continue;
+						}
+
 						uint8_t rot_3 = anim_frame_buffer[frame_ptr++];
 						uint8_t rot_4 = anim_frame_buffer[frame_ptr++];
 
@@ -1476,18 +1853,31 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 						rot.x = 0;
 						rot.z = 0;
 
-						// TODO: Different mask required to TR4!
-						switch (flags) {
-							case 1:
-								rot.x = (rot_16_a & 0x3ff) << 6;
-								break;
-							case 2:
-								rot.y = (rot_16_a & 0x3ff) << 6;
-								break;
-							case 3:
-								rot.z = (rot_16_a & 0x3ff) << 6;
-								break;
-						} 
+						if (p_level_format == TR4_PC) {
+							switch (flags) {
+								case 1:
+									rot.x = (rot_16_a & 0xfff) << 4;
+									break;
+								case 2:
+									rot.y = (rot_16_a & 0xfff) << 4;
+									break;
+								case 3:
+									rot.z = (rot_16_a & 0xfff) << 4;
+									break;
+							}
+						} else {
+							switch (flags) {
+								case 1:
+									rot.x = (rot_16_a & 0x3ff) << 6;
+									break;
+								case 2:
+									rot.y = (rot_16_a & 0x3ff) << 6;
+									break;
+								case 3:
+									rot.z = (rot_16_a & 0x3ff) << 6;
+									break;
+							}
+						}
 
 						bone_transform.rot = rot;
 					}
@@ -1508,16 +1898,16 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 		moveable_infos.set(i, moveable_info);
 	}
 
-	for (int i = 0; i < id_list.size(); i++) {
+	for (size_t i = 0; i < id_list.size(); i++) {
 		tr_types.moveable_info_map[id_list[i]] = moveable_infos[i];
 	}
 
 	// TODO: Setup types
 
 	// Statics Count
-	HashMap<int, TRStaticInfo > static_map;
+	HashMap<int32_t, TRStaticInfo > static_map;
 	int32_t static_count = p_file->get_s32();
-	for (int i = 0; i < static_count; i++) {
+	for (size_t i = 0; i < static_count; i++) {
 		int32_t static_id = p_file->get_u32();
 		
 		TRStaticInfo static_info;
@@ -1559,12 +1949,12 @@ void read_tr_sprites(Ref<TRFileAccess> p_file) {
 	int32_t sprite_info_count = p_file->get_s32();
 	ERR_FAIL_COND(sprite_info_count > 512);
 
-	for (int i = 0; i < sprite_info_count; i++) {
+	for (int32_t i = 0; i < sprite_info_count; i++) {
 		TRSpriteInfo sprite_info = read_tr_sprite_info(p_file);
 	}
 
 	int32_t sprite_count = p_file->get_s32();
-	for (int i = 0; i < sprite_count; i++) {
+	for (int32_t i = 0; i < sprite_count; i++) {
 		int32_t type_num = p_file->get_s32();
 
 		if (type_num < 191) {
@@ -1605,16 +1995,28 @@ void read_tr_cameras(Ref<TRFileAccess> p_file) {
 	TRCameraInfo camera_info;
 	camera_info.fixed.resize(num_cameras);
 
-	for (int i = 0; i < camera_info.fixed.size(); i++) {
+	for (int32_t i = 0; i < camera_info.fixed.size(); i++) {
 		camera_info.fixed.set(i, read_tr_game_vector(p_file));
 	}
 }
 
 void read_tr_flyby_cameras(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
-	int32_t num_flyby_cameras = 0;
-
 	if (p_level_format == TR4_PC) {
+		int32_t num_flyby_cameras = p_file->get_u32();
+		for (int i = 0; i < num_flyby_cameras; i++) {
+			TRPos pos = read_tr_pos(p_file);
+			TRPos angles = read_tr_pos(p_file);
+			uint8_t sequence = p_file->get_u8();
+			uint8_t index = p_file->get_u8();
 
+			uint16_t fov = p_file->get_u16();
+			int16_t roll = p_file->get_s16();
+			uint16_t timer = p_file->get_u16();
+			uint16_t speed = p_file->get_u16();
+			uint16_t flags = p_file->get_u16();
+
+			uint32_t room_id = p_file->get_u32();
+		}
 	}
 }
 
@@ -1624,7 +2026,7 @@ Vector<TRObjectVector> read_tr_sound_effects(Ref<TRFileAccess> p_file) {
 
 	sound_effect_table.resize(num_sound_effects);
 
-	for (int i = 0; i < sound_effect_table.size(); i++) {
+	for (int32_t i = 0; i < sound_effect_table.size(); i++) {
 		sound_effect_table.set(i, read_tr_type_vector(p_file));
 	}
 
@@ -1657,14 +2059,14 @@ void read_tr_nav_cells(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 	Vector<TRNavCell> nav_cells;
 	nav_cells.resize(num_nav_cells);
-	for (int i = 0; i < num_nav_cells; i++) {
+	for (int32_t i = 0; i < num_nav_cells; i++) {
 		nav_cells.set(i, read_tr_nav_cell(p_file, p_level_format));
 	}
 
 	int32_t num_overlaps = p_file->get_s32();
 	PackedByteArray overlaps = p_file->get_buffer(num_overlaps * sizeof(int16_t));
 
-	for (int i = 0; i < 2; i++) {
+	for (int32_t i = 0; i < 2; i++) {
 		PackedByteArray ground_zone = p_file->get_buffer(num_nav_cells * sizeof(int16_t));
 		PackedByteArray ground_zone2 = p_file->get_buffer(num_nav_cells * sizeof(int16_t));
 		if (p_level_format != TR1_PC) {
@@ -1675,10 +2077,28 @@ void read_tr_nav_cells(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	}
 }
 
-void read_tr_animated_textures(Ref<TRFileAccess> p_file) {
+void read_tr_animated_textures(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	int32_t animated_texture_dispatch_count = p_file->get_s32();
 
 	PackedByteArray animated_texture_dispatches = p_file->get_buffer(animated_texture_dispatch_count * sizeof(int16_t));
+
+	if (p_level_format == TR4_PC) {
+		uint8_t animated_textures_uv_count = p_file->get_u8();
+	}
+}
+
+void read_tr_ai_objects(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
+	if (p_level_format == TR4_PC) {
+		uint32_t ai_object_count = p_file->get_u32();
+		for (int i = 0; i < ai_object_count; i++) {
+			uint16_t type_id = p_file->get_u16();
+			uint16_t room = p_file->get_u16();
+			TRPos pos = read_tr_pos(p_file);
+			int16_t ocb = p_file->get_s16();
+			uint16_t flags = p_file->get_u16();
+			int32_t angle = p_file->get_s32();
+		}
+	}
 }
 
 Vector<TREntity> read_tr_entities(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
@@ -1689,7 +2109,7 @@ Vector<TREntity> read_tr_entities(Ref<TRFileAccess> p_file, TRLevelFormat p_leve
 	if (entity_count) {
 		ERR_FAIL_COND_V(entity_count > 10240, Vector<TREntity>());
 		
-		for (int i = 0; i < entity_count; i++) {
+		for (int32_t i = 0; i < entity_count; i++) {
 			TREntity entity;
 
 			entity.type_id = p_file->get_s16();
@@ -1719,14 +2139,21 @@ Vector<TREntity> read_tr_entities(Ref<TRFileAccess> p_file, TRLevelFormat p_leve
 }
 
 void read_tr_lightmap(Ref<TRFileAccess> p_file) {
-	int pos = p_file->get_position();
+	int32_t pos = p_file->get_position();
 	p_file->seek(p_file->get_position() + (sizeof(uint8_t) * 32 * TR_TEXTILE_SIZE));
 }
 
 TRCameraFrame read_tr_camera_frame(Ref<TRFileAccess> p_file) {
 	TRCameraFrame camera_frame;
-	camera_frame.target = read_tr_pos(p_file);
-	camera_frame.pos = read_tr_pos(p_file);
+	
+	camera_frame.target.x = p_file->get_s16();
+	camera_frame.target.y = p_file->get_s16();
+	camera_frame.target.z = p_file->get_s16();
+	
+	camera_frame.pos.x = p_file->get_s16();
+	camera_frame.pos.y = p_file->get_s16();
+	camera_frame.pos.z = p_file->get_s16();
+	
 	camera_frame.fov = p_file->get_s16();
 	camera_frame.roll = p_file->get_s16();
 
@@ -1737,7 +2164,7 @@ Vector<TRCameraFrame> read_tr_camera_frames(Ref<TRFileAccess> p_file) {
 	int16_t camera_frame_count = p_file->get_s16();
 
 	Vector<TRCameraFrame> camera_frames;
-	for (int i = 0; i < camera_frame_count; i++) {
+	for (int32_t i = 0; i < camera_frame_count; i++) {
 		camera_frames.push_back(read_tr_camera_frame(p_file));
 	}
 
@@ -1803,7 +2230,7 @@ PackedInt32Array read_tr_sound_indices(Ref<TRFileAccess> p_file) {
 	uint32_t indices_count = p_file->get_u32();
 	PackedInt32Array pi32array;
 	pi32array.resize(indices_count);
-	for (int i = 0; i < indices_count; i++) {
+	for (int32_t i = 0; i < indices_count; i++) {
 		pi32array.set(i, p_file->get_u32());
 	}
 
@@ -1814,9 +2241,9 @@ Vector<TRColor3> read_tr_palette(Ref<TRFileAccess> p_file) {
 	Vector<TRColor3> palette;
 	palette.resize(TR_TEXTILE_SIZE);
 
-	int pos = p_file->get_position();
+	int32_t pos = p_file->get_position();
 
-	for (int i = 0; i < TR_TEXTILE_SIZE; i++) {
+	for (int32_t i = 0; i < TR_TEXTILE_SIZE; i++) {
 		TRColor3 color;
 
 		color.r = p_file->get_u8() * 4;
@@ -1833,9 +2260,9 @@ Vector<TRColor4> read_tr_palette_32(Ref<TRFileAccess> p_file) {
 	Vector<TRColor4> palette;
 	palette.resize(TR_TEXTILE_SIZE);
 
-	int pos = p_file->get_position();
+	int32_t pos = p_file->get_position();
 
-	for (int i = 0; i < TR_TEXTILE_SIZE; i++) {
+	for (int32_t i = 0; i < TR_TEXTILE_SIZE; i++) {
 		TRColor4 color;
 
 		color.r = p_file->get_u8() * 4;
@@ -1964,9 +2391,9 @@ static float u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
 	VertexAndUV vert_and_uv;\
 	vert_and_uv.vertex_idx = p_current_idx;\
 	vert_and_uv.uv = p_uv;\
-	int result = -1;\
-	int vertex_id_map_size = p_vertex_id_list.size();\
-	for (int idx = 0; idx < vertex_id_map_size; idx++) {\
+	int32_t result = -1;\
+	int32_t vertex_id_map_size = p_vertex_id_list.size();\
+	for (size_t idx = 0; idx < vertex_id_map_size; idx++) {\
 		VertexAndUV new_vert_and_uv = p_vertex_id_list.get(idx);\
 		if (new_vert_and_uv.vertex_idx == vert_and_uv.vertex_idx &&\
 				new_vert_and_uv.uv.u == vert_and_uv.uv.u &&\
@@ -1988,9 +2415,9 @@ static float u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
 	VertexAndUV vert_and_uv;\
 	vert_and_uv.vertex_idx = p_current_idx;\
 	vert_and_uv.uv = p_uv;\
-	int result = -1;\
-	int vertex_uv_map_size = p_vertex_uv_map.get(p_texture_page).size();\
-	for (int idx = 0; idx < vertex_uv_map_size; idx++) {\
+	int32_t result = -1;\
+	int32_t vertex_uv_map_size = p_vertex_uv_map.get(p_texture_page).size();\
+	for (size_t idx = 0; idx < vertex_uv_map_size; idx++) {\
 		VertexAndUV new_vert_and_uv = p_vertex_uv_map.get(p_texture_page).get(idx);\
 		if (new_vert_and_uv.vertex_idx == vert_and_uv.vertex_idx &&\
 				new_vert_and_uv.uv.u == vert_and_uv.uv.u &&\
@@ -2013,28 +2440,32 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 	Vector<TRRoomVertex> room_verts;
 	room_verts.resize(p_room_data.room_vertex_count);
 
-	for (int i = 0; i < p_room_data.room_vertex_count; i++) {
+	for (int32_t i = 0; i < p_room_data.room_vertex_count; i++) {
 		room_verts.set(i, p_room_data.room_vertices[i]);
 	}
 
 	struct VertexAndUV {
-		int vertex_idx;
+		int32_t vertex_idx;
 		TRUV uv;
 	};
 
-	int last_material_id = 0;
+	int32_t last_material_id = 0;
 
-	HashMap<int, Vector<VertexAndUV>> vertex_uv_map;
-	HashMap<int, Vector<int> > material_index_map;
+	HashMap<int32_t, Vector<VertexAndUV>> vertex_uv_map;
+	HashMap<int32_t, Vector<int32_t> > material_index_map;
 
 	//
-	for (int i = 0; i < p_room_data.room_quad_count; i++) {
+	for (int32_t i = 0; i < p_room_data.room_quad_count; i++) {
 		if (p_room_data.room_quads[i].tex_info_id < 0) {
 			continue;
 		}
 
+		if (p_room_data.room_quads[i].tex_info_id >= p_types.texture_infos.size()) {
+			continue;
+		}
+
 		TRTextureInfo texture_info = p_types.texture_infos.get(p_room_data.room_quads[i].tex_info_id);
-		int material_id = texture_info.texture_page;
+		int32_t material_id = texture_info.texture_page;
 		if (texture_info.draw_type == 1) {
 			material_id += p_solid_level_materials.size();
 		}
@@ -2045,7 +2476,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 		}
 
 		if (!material_index_map.has(material_id)) {
-			material_index_map.insert(material_id, Vector<int>());
+			material_index_map.insert(material_id, Vector<int32_t>());
 		}
 
 		INSERT_TEXTURED_VERTEX(p_room_data.room_quads[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, room_verts);
@@ -2057,13 +2488,17 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 		INSERT_TEXTURED_VERTEX(p_room_data.room_quads[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, room_verts);
 	}
 
-	for (int i = 0; i < p_room_data.room_triangle_count; i++) {
+	for (int32_t i = 0; i < p_room_data.room_triangle_count; i++) {
 		if (p_room_data.room_triangles[i].tex_info_id < 0) {
 			continue;
 		}
 
+		if (p_room_data.room_triangles[i].tex_info_id >= p_types.texture_infos.size()) {
+			continue;
+		}
+
 		TRTextureInfo texture_info = p_types.texture_infos.get(p_room_data.room_triangles[i].tex_info_id);
-		int material_id = texture_info.texture_page;
+		int32_t material_id = texture_info.texture_page;
 		if (texture_info.draw_type == 1) {
 			material_id += p_solid_level_materials.size();
 		}
@@ -2075,7 +2510,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 		}
 
 		if (!material_index_map.has(material_id)) {
-			material_index_map.insert(material_id, Vector<int>());
+			material_index_map.insert(material_id, Vector<int32_t>());
 		}
 
 		INSERT_TEXTURED_VERTEX(p_room_data.room_triangles[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, room_verts);
@@ -2086,7 +2521,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 	Vector<Ref<Material>> all_materials = p_solid_level_materials;
 	all_materials.append_array(p_level_trans_materials);
 
-	for (int current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
+	for (size_t current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
 
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 
@@ -2094,7 +2529,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 			continue;
 		}
 
-		for (int i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
+		for (size_t i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
 			VertexAndUV vertex_and_uv = vertex_uv_map.get(current_tex_page).get(i);
 			TRRoomVertex room_vertex = room_verts[vertex_and_uv.vertex_idx];
 
@@ -2111,11 +2546,13 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 			st->add_vertex(vec3);
 		}
 
-		for (int i = 0; i < material_index_map.get(current_tex_page).size(); i++) {
+		for (int32_t i = 0; i < material_index_map.get(current_tex_page).size(); i++) {
 			st->add_index(material_index_map.get(current_tex_page).get(i));
 		}
 
-		st->set_material(all_materials.get(current_tex_page));
+		if (all_materials.size() > current_tex_page) {
+			st->set_material(all_materials.get(current_tex_page));
+		}
 		st->generate_normals();
 		ar_mesh = st->commit(ar_mesh);
 		ar_mesh->lightmap_unwrap();
@@ -2130,7 +2567,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 
 	Vector<TRVertex> mesh_verts;
 
-	for (int i = 0; i < p_mesh_data.vertices.size(); i++) {
+	for (int32_t i = 0; i < p_mesh_data.vertices.size(); i++) {
 		mesh_verts.push_back(p_mesh_data.vertices[i]);
 	}
 
@@ -2144,12 +2581,12 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		uint8_t id;
 	};
 
-	int last_material_id = 0;
+	int32_t last_material_id = 0;
 
 	// Colors
 	Vector<VertexAndUV> vertex_color_uv_map;
-	Vector<int> color_index_map;
-	for (int i = 0; i < p_mesh_data.color_quads_count; i++) {
+	Vector<int32_t> color_index_map;
+	for (int32_t i = 0; i < p_mesh_data.color_quads_count; i++) {
 		int16_t id = p_mesh_data.color_quads[i].tex_info_id;
 
 		uint32_t y = (id / 16);
@@ -2179,7 +2616,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		INSERT_COLORED_VERTEX(p_mesh_data.color_quads[i].indices[0], uv[0], vertex_color_uv_map, color_index_map, mesh_verts);
 	}
 
-	for (int i = 0; i < p_mesh_data.color_triangles_count; i++) {
+	for (int32_t i = 0; i < p_mesh_data.color_triangles_count; i++) {
 		int16_t id = p_mesh_data.color_triangles[i].tex_info_id;
 
 		uint32_t y = (id / 16);
@@ -2203,11 +2640,11 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 	}
 
 	// Textures
-	HashMap<int, Vector<VertexAndUV>> vertex_uv_map;
-	HashMap<int, Vector<int> > material_index_map;
-	for (int i = 0; i < p_mesh_data.texture_quads_count; i++) {
+	HashMap<int32_t, Vector<VertexAndUV>> vertex_uv_map;
+	HashMap<int32_t, Vector<int32_t> > material_index_map;
+	for (int32_t i = 0; i < p_mesh_data.texture_quads_count; i++) {
 		TRTextureInfo texture_info = p_types.texture_infos.get(p_mesh_data.texture_quads[i].tex_info_id);
-		int material_id = texture_info.texture_page;
+		int32_t material_id = texture_info.texture_page;
 		if (texture_info.draw_type == 1) {
 			material_id += p_solid_level_materials.size();
 		}
@@ -2218,7 +2655,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		}
 
 		if (!material_index_map.has(material_id)) {
-			material_index_map.insert(material_id, Vector<int>());
+			material_index_map.insert(material_id, Vector<int32_t>());
 		}
 
 		INSERT_TEXTURED_VERTEX(p_mesh_data.texture_quads[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, mesh_verts);
@@ -2230,9 +2667,9 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		INSERT_TEXTURED_VERTEX(p_mesh_data.texture_quads[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, mesh_verts);
 	}
 
-	for (int i = 0; i < p_mesh_data.texture_triangles_count; i++) {
+	for (int32_t i = 0; i < p_mesh_data.texture_triangles_count; i++) {
 		TRTextureInfo texture_info = p_types.texture_infos.get(p_mesh_data.texture_triangles[i].tex_info_id);
-		int material_id = texture_info.texture_page;
+		int32_t material_id = texture_info.texture_page;
 		if (texture_info.draw_type == 1) {
 			material_id += p_solid_level_materials.size();
 		}
@@ -2244,7 +2681,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		}
 
 		if (!material_index_map.has(material_id)) {
-			material_index_map.insert(material_id, Vector<int>());
+			material_index_map.insert(material_id, Vector<int32_t>());
 		}
 
 		INSERT_TEXTURED_VERTEX(p_mesh_data.texture_triangles[i].indices[0], texture_info.uv[0], material_id, vertex_uv_map, material_index_map, mesh_verts);
@@ -2255,7 +2692,9 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 	if (vertex_color_uv_map.size() > 0) {
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 
-		for (int i = 0; i < vertex_color_uv_map.size(); i++) {
+		st->set_smooth_group(0);
+
+		for (int32_t i = 0; i < vertex_color_uv_map.size(); i++) {
 			VertexAndUV vertex_and_uv = vertex_color_uv_map.get(i);
 			TRVertex vertex = mesh_verts[vertex_and_uv.vertex_idx];
 
@@ -2281,7 +2720,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 	Vector<Ref<Material>> all_materials = p_solid_level_materials;
 	all_materials.append_array(p_level_trans_materials);
 
-	for (int current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
+	for (int32_t current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 
 		if (!vertex_uv_map.has(current_tex_page) || !material_index_map.has(current_tex_page)) {
@@ -2307,7 +2746,9 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 			st->add_index(material_index_map.get(current_tex_page).get(i));
 		}
 
-		st->set_material(all_materials.get(current_tex_page));
+		if (current_tex_page < all_materials.size()) {
+			st->set_material(all_materials.get(current_tex_page));
+		}
 		ar_mesh = st->commit(ar_mesh);
 	}
 
@@ -2522,7 +2963,6 @@ void set_owner_recursively(Node *p_node, Node *p_owner) {
 Node3D *generate_godot_scene(
 	Node *p_root,
 	TRLevelData level_data,
-	TRLevelFormat p_level_format,
 	bool p_lara_only) {
 
 	Vector<Ref<Material>> level_materials;
@@ -2538,10 +2978,11 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
+			const float VERTEX_COLOR_MULTIPLIER = 2.0;\n\
 			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
 			ALBEDO = albedo_tex.rgb;\n\
-			EMISSION.rgb = albedo_tex.rgb * COLOR.rgb;\n\
+			EMISSION.rgb = albedo_tex.rgb * (COLOR.rgb * VERTEX_COLOR_MULTIPLIER);\n\
 			METALLIC = 0.0;\n\
 			SPECULAR = 1.0;\n\
 			ROUGHNESS = 1.0;\n\
@@ -2555,21 +2996,22 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
+			const float VERTEX_COLOR_MULTIPLIER = 2.0;\n\
 			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
 			ALBEDO = albedo_tex.rgb;\n\
-			EMISSION.rgb = albedo_tex.rgb * COLOR.rgb;\n\
+			EMISSION.rgb = albedo_tex.rgb * (COLOR.rgb * VERTEX_COLOR_MULTIPLIER);\n\
 			METALLIC = 0.0;\n\
 			SPECULAR = 1.0;\n\
 			ROUGHNESS = 1.0;\n\
 			ALPHA = albedo_tex.a;\n\
-			ALPHA_SCISSOR_THRESHOLD = 0.0;\n\
+			ALPHA_SCISSOR_THRESHOLD = 1.0;\n\
 		}");
 
 	Ref<Material> palette_material;
 	
 	// Palette Texture
-	{
+	if (!level_data.palette.is_empty()) {
 		Ref<Image> palette_image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
 		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
 			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
@@ -2586,34 +3028,93 @@ Node3D *generate_godot_scene(
 		palette_image->save_png(palette_path);
 	}
 
-	// Image Textures
-	for (int i = 0; i < level_data.textures.size(); i++) {
-		PackedByteArray current_texture = level_data.textures.get(i);
-		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
-				uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
+	Vector<Ref<ImageTexture>> image_textures;
 
-				if (index == 0x00) {
-					TRColor3 color = level_data.palette.get(index);
-					image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
-				} else {
-					TRColor3 color = level_data.palette.get(index);
-					image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
+	for (int i = 0; i < level_data.level_textures.size(); i++) {
+		PackedByteArray current_texture = level_data.level_textures.get(i);
+		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
+		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
+			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
+
+					if (index == 0x00) {
+						TRColor3 color = level_data.palette.get(index);
+						image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
+					}
+					else {
+						TRColor3 color = level_data.palette.get(index);
+						image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
+					}
+				}
+			}
+		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
+			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
+					uint8_t b = current_texture.get(index + 0);
+					uint8_t g = current_texture.get(index + 1);
+					uint8_t r = current_texture.get(index + 2);
+					uint8_t a = current_texture.get(index + 3);
+
+					image->set_pixel(x, y, Color(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), a / 255.0f));
 				}
 			}
 		}
 
 #if 0
-		String image_path = String("Texture_") + itos(i) + String(".png");
+		String image_path = String("LevelTexture_") + itos(i) + String(".png");
 		image->save_png(image_path);
 #endif
 
-		Ref<ImageTexture> it = ImageTexture::create_from_image(image);
-		level_materials.append(generate_tr_shader_material(it, level_shader));
-		level_trans_materials.append(generate_tr_shader_material(it, level_trans_shader));
-		entity_materials.append(generate_tr_generic_material(it, false));
-		entity_trans_materials.append(generate_tr_generic_material(it, true));
+		image_textures.push_back(ImageTexture::create_from_image(image));
+	}
+
+	for (int i = 0; i < level_data.entity_textures.size(); i++) {
+		PackedByteArray current_texture = level_data.entity_textures.get(i);
+		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
+		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
+			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
+
+					if (index == 0x00) {
+						TRColor3 color = level_data.palette.get(index);
+						image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
+					}
+					else {
+						TRColor3 color = level_data.palette.get(index);
+						image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
+					}
+				}
+			}
+		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
+			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
+					uint8_t b = current_texture.get(index + 0);
+					uint8_t g = current_texture.get(index + 1);
+					uint8_t r = current_texture.get(index + 2);
+					uint8_t a = current_texture.get(index + 3);
+
+					image->set_pixel(x, y, Color(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), a / 255.0f));
+				}
+			}
+		}
+
+#if 0
+		String image_path = String("EntityTexture_") + itos(i) + String(".png");
+		image->save_png(image_path);
+#endif
+
+		image_textures.push_back(ImageTexture::create_from_image(image));
+	}
+
+	for (int i = 0; i < image_textures.size(); i++) {
+		level_materials.append(generate_tr_shader_material(image_textures[i], level_shader));
+		level_trans_materials.append(generate_tr_shader_material(image_textures[i], level_trans_shader));
+		entity_materials.append(generate_tr_generic_material(image_textures[i], false));
+		entity_trans_materials.append(generate_tr_generic_material(image_textures[i], true));
 	}
 
 
@@ -2626,14 +3127,15 @@ Node3D *generate_godot_scene(
 	Vector<Ref<AudioStream>> samples;
 
 	// Audio
-	for (TRSoundInfo tr_sound_info : level_data.sound_infos) {
-		int32_t sample_id = tr_sound_info.sample_index;
-		int loop_mode = tr_sound_info.characteristics & 0x2;;
-		int sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
+	if (!level_data.sound_buffer.is_empty()) {
+		for (TRSoundInfo tr_sound_info : level_data.sound_infos) {
+			int32_t sample_id = tr_sound_info.sample_index;
+			int loop_mode = tr_sound_info.characteristics & 0x2;;
+			int sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
 
-		Ref<AudioStreamRandomizer> sample_collection = memnew(AudioStreamRandomizer);
+			Ref<AudioStreamRandomizer> sample_collection = memnew(AudioStreamRandomizer);
 
-		switch (loop_mode) {
+			switch (loop_mode) {
 			case 0:
 				sample_collection->set_meta("tr_loop_mode", "looping_disabled");
 				break;
@@ -2646,62 +3148,68 @@ Node3D *generate_godot_scene(
 			case 3:
 				sample_collection->set_meta("tr_loop_mode", "one_shot_wait");
 				break;
-		}
+			}
 
-		sample_collection->set_playback_mode(AudioStreamRandomizer::PLAYBACK_RANDOM);
+			sample_collection->set_playback_mode(AudioStreamRandomizer::PLAYBACK_RANDOM);
 
-		for (int i = 0; i < sample_count; i++) {
-			uint32_t sample_offset = level_data.sound_indices.get(sample_id + i);
-			Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(level_data.sound_buffer);
+			for (int i = 0; i < sample_count; i++) {
+				uint32_t sample_offset = level_data.sound_indices.get(sample_id + i);
+				Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(level_data.sound_buffer);
 
-			Ref<AudioStreamWAV> sample = memnew(AudioStreamWAV);
-			buffer_access->seek(sample_offset);
-			if (buffer_access->get_fixed_string(4) == "RIFF") {
-				uint32_t file_size = buffer_access->get_u32();
-				if (file_size > 0) {
-					if (buffer_access->get_fixed_string(4) == "WAVE") {
-						if (buffer_access->get_fixed_string(4) == "fmt ") {
-							uint32_t length = buffer_access->get_u32();
-							uint16_t format_type = buffer_access->get_u16();
-							ERR_FAIL_COND_V(format_type != 1, nullptr);
-							uint16_t channels = buffer_access->get_u16();
-							ERR_FAIL_COND_V(channels <= 0 || channels > 2, nullptr);
-							uint32_t mix_rate = buffer_access->get_u32();
-							uint32_t byte_per_second = buffer_access->get_u32();
-							uint16_t byte_per_block = buffer_access->get_u16();
-							uint16_t bits_per_sample = buffer_access->get_u16();
-							ERR_FAIL_COND_V(bits_per_sample != 16 && bits_per_sample != 8, nullptr);
+				Ref<AudioStreamWAV> sample = memnew(AudioStreamWAV);
+				if (sample_offset == 0xffffffff) {
+					continue;
+				}
 
-							if (buffer_access->get_fixed_string(4) == "data") {
-								uint32_t buffer_size = buffer_access->get_u32();
-								PackedByteArray pba = buffer_access->get_buffer(buffer_size);
-								for (int buf_idx = 0; buf_idx < pba.size(); buf_idx++) {
-									pba.ptrw()[buf_idx] = pba.ptr()[buf_idx] - 128;
+				buffer_access->seek(sample_offset);
+				if (buffer_access->get_fixed_string(4) == "RIFF") {
+					uint32_t file_size = buffer_access->get_u32();
+					if (file_size > 0) {
+						if (buffer_access->get_fixed_string(4) == "WAVE") {
+							if (buffer_access->get_fixed_string(4) == "fmt ") {
+								uint32_t length = buffer_access->get_u32();
+								uint16_t format_type = buffer_access->get_u16();
+								ERR_FAIL_COND_V(format_type != 1, nullptr);
+								uint16_t channels = buffer_access->get_u16();
+								ERR_FAIL_COND_V(channels <= 0 || channels > 2, nullptr);
+								uint32_t mix_rate = buffer_access->get_u32();
+								uint32_t byte_per_second = buffer_access->get_u32();
+								uint16_t byte_per_block = buffer_access->get_u16();
+								uint16_t bits_per_sample = buffer_access->get_u16();
+								ERR_FAIL_COND_V(bits_per_sample != 16 && bits_per_sample != 8, nullptr);
+
+								if (buffer_access->get_fixed_string(4) == "data") {
+									uint32_t buffer_size = buffer_access->get_u32();
+									PackedByteArray pba = buffer_access->get_buffer(buffer_size);
+									if (bits_per_sample <= 8) {
+										for (int buf_idx = 0; buf_idx < pba.size(); buf_idx++) {
+											pba.ptrw()[buf_idx] = pba.ptr()[buf_idx] - 128;
+										}
+									}
+									sample->set_format(bits_per_sample == 16 ? AudioStreamWAV::FORMAT_16_BITS : AudioStreamWAV::FORMAT_8_BITS);
+									sample->set_stereo(channels == 1 ? false : true);
+									sample->set_mix_rate(mix_rate);
+									sample->set_loop_mode(loop_mode == 2 ? AudioStreamWAV::LOOP_FORWARD : AudioStreamWAV::LOOP_DISABLED);
+									sample->set_data(pba);
+									sample->set_loop_begin(0);
+									sample->set_loop_end(buffer_size);
+
+									sample->save_to_wav("res://test.wav");
+
+									sample_collection->add_stream(i, sample);
 								}
-								sample->set_format(bits_per_sample == 16 ? AudioStreamWAV::FORMAT_16_BITS : AudioStreamWAV::FORMAT_8_BITS);
-								sample->set_stereo(channels == 1 ? false : true);
-								sample->set_mix_rate(mix_rate);
-								sample->set_loop_mode(loop_mode == 2 ? AudioStreamWAV::LOOP_FORWARD : AudioStreamWAV::LOOP_DISABLED);
-								sample->set_data(pba);
-								sample->set_loop_begin(0);
-								sample->set_loop_end(buffer_size);
-
-								sample->save_to_wav("res://test.wav");
-
-								sample_collection->add_stream(i, sample);
 							}
 						}
 					}
 				}
 			}
+			samples.append(sample_collection);
 		}
-		samples.append(sample_collection);
 	}
 
 	Node *scene_owner = p_root->get_owner() != nullptr ? p_root->get_owner() : p_root;
 
 	if (!p_lara_only) {
-
 		Node3D *rooms_node = memnew(Node3D);
 		p_root->add_child(rooms_node);
 		rooms_node->set_name("TRRooms");
@@ -2712,44 +3220,48 @@ Node3D *generate_godot_scene(
 			level_data.types,
 			meshes,
 			samples,
-			p_level_format);
+			level_data.format);
 
+#if 0
 		for (Node3D *moveable : moveable_node) {
 			rooms_node->add_child(moveable);
 			set_owner_recursively(moveable, scene_owner);
 			moveable->set_display_folded(true);
 		}
+#endif
 
-		Node3D* entities_node = memnew(Node3D);
+		Node3D *entities_node = memnew(Node3D);
 		p_root->add_child(entities_node);
 		entities_node->set_name("TREntities");
 		entities_node->set_owner(scene_owner);
 
 		uint32_t entity_idx = 0;
 		for (const TREntity& entity : level_data.entities) {
-			Node3D * entity_node = memnew(Node3D);
+			Node3D *entity_node = memnew(Node3D);
+
+			real_t degrees_rotation = (real_t)((entity.transform.rot.y / 16384.0) * -90.0) + 180.0;
 			entity_node->set_transform(Transform3D(Basis().rotated(
-				Vector3(0.0, 1.0, 0.0), Math::deg_to_rad((float)entity.transform.rot.y / 16384.0f * -90)), Vector3(
+				Vector3(0.0, 1.0, 0.0), Math::deg_to_rad(degrees_rotation)), Vector3(
 					entity.transform.pos.x * TR_TO_GODOT_SCALE,
 					entity.transform.pos.y * -TR_TO_GODOT_SCALE,
 					entity.transform.pos.z * -TR_TO_GODOT_SCALE)));
 
 			entities_node->add_child(entity_node);
-			entity_node->set_name("Entity_" + itos(entity_idx) + " (" + get_type_info_name(entity.type_id, p_level_format) + ")");
+			entity_node->set_name("Entity_" + itos(entity_idx) + " (" + get_type_info_name(entity.type_id, level_data.format) + ")");
 			entity_node->set_owner(scene_owner);
 			entity_node->set_display_folded(true);
 
 			if (level_data.types.moveable_info_map.has(entity.type_id)) {
-				Node3D* new_node = create_godot_moveable_model(
+				Node3D *new_node = create_godot_moveable_model(
 					entity.type_id,
 					level_data.types.moveable_info_map[entity.type_id],
 					level_data.types,
 					meshes,
 					samples,
-					p_level_format,
+					level_data.format,
 					false);
 				ERR_FAIL_NULL_V(new_node, nullptr);
-				Node3D* type = new_node;
+				Node3D *type = new_node;
 				entity_node->add_child(type);
 				set_owner_recursively(type, scene_owner);
 				type->set_display_folded(true);
@@ -2760,7 +3272,7 @@ Node3D *generate_godot_scene(
 
 		uint32_t room_idx = 0;
 		for (const TRRoom& room : level_data.rooms) {
-			Node3D* node_3d = memnew(Node3D);
+			Node3D *node_3d = memnew(Node3D);
 			node_3d->set_name(String("Room_") + itos(room_idx));
 			node_3d->set_display_folded(true);
 			rooms_node->add_child(node_3d);
@@ -2831,13 +3343,13 @@ Node3D *generate_godot_scene(
 		}
 		return rooms_node;
 	} else {
-		Node3D* new_node = create_godot_moveable_model(
+		Node3D *new_node = create_godot_moveable_model(
 			0,
 			level_data.types.moveable_info_map[0],
 			level_data.types,
 			meshes,
 			samples,
-			p_level_format,
+			level_data.format,
 			true);
 		ERR_FAIL_COND_V(!new_node, nullptr);
 
@@ -2858,33 +3370,11 @@ void TRLevel::clear_level() {
 }
 
 void TRLevel::load_level(bool p_lara_only) {
-	Error error;
+	TRLevelData level_data = load_level_type(level_path);
 
-	Ref<TRFileAccess> file = TRFileAccess::open(level_path, &error);
-	if (error != Error::OK) {
-		return;
-	}
-
-	TRLevelFormat format = TR1_PC;
-	int32_t version = file->get_s32();
-	if (version == 0x00000020) {
-		format = TR1_PC;
-	} else if (version == 0x0000002D) {
-		format = TR2_PC;
-	} else if (version == 0xFF080038 || version == 0xFF180038) {
-		format = TR3_PC;
-	} else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
-		format = TR4_PC;
-	}
-
-	ERR_FAIL_COND(format == TR_VERSION_UNKNOWN);
-
-	TRLevelData level_data = load_level_type(file, format);
-
-	Node3D* rooms_node = generate_godot_scene(
+	Node3D *rooms_node = generate_godot_scene(
 		this, 
 		level_data,
-		format,
 		p_lara_only);
 }
 
@@ -2935,15 +3425,41 @@ void dump_32bit_textures(Vector<PackedByteArray> p_textures) {
 	}
 }
 
-TRLevelData TRLevel::load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
+TRLevelData TRLevel::load_level_type(String file_path) {
 	Vector<TRColor3> palette;
 	Vector<TRColor4> palette32;
-	Vector<PackedByteArray> textures;
+	TRTextureType texture_type = TR_TEXTURE_TYPE_8_PAL;
+	Vector<PackedByteArray> entity_textures;
+	Vector<PackedByteArray> level_textures;
 	PackedByteArray other_decompressed_buffer;
 
-	Ref<TRFileAccess> file = p_file;
+	Error error;
+	TRLevelData level_data;
+	level_data.format = TR_VERSION_UNKNOWN;
 
-	if (p_level_format == TR4_PC) {
+	Ref<TRFileAccess> file = TRFileAccess::open(level_path, &error);
+	if (error != Error::OK) {
+		return level_data;
+	}
+
+	TRLevelFormat format = TR1_PC;
+	int32_t version = file->get_s32();
+	if (version == 0x00000020) {
+		format = TR1_PC;
+	}
+	else if (version == 0x0000002D) {
+		format = TR2_PC;
+	}
+	else if (version == 0xFF080038 || version == 0xFF180038) {
+		format = TR3_PC;
+	}
+	else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
+		format = TR4_PC;
+	}
+
+	ERR_FAIL_COND_V(format == TR_VERSION_UNKNOWN, level_data);
+
+	if (format == TR4_PC) {
 		uint16_t num_room_textiles = file->get_u16();
 		uint16_t num_obj_textiles = file->get_u16();
 		uint16_t num_bump_textiles = file->get_u16();
@@ -2974,9 +3490,10 @@ TRLevelData TRLevel::load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_l
 
 
 		Ref<TRFileAccess> uncompressed_file_access = TRFileAccess::create_from_buffer(textiles32_decompressed_buffer);
-		Vector<PackedByteArray> room_textures_32 = read_tr_texture_pages_32(uncompressed_file_access, num_room_textiles);
-		Vector<PackedByteArray> object_textures_32 = read_tr_texture_pages_32(uncompressed_file_access, num_obj_textiles);
+		level_textures = read_tr_texture_pages_32(uncompressed_file_access, num_room_textiles);
+		entity_textures = read_tr_texture_pages_32(uncompressed_file_access, num_obj_textiles);
 		Vector<PackedByteArray> bump_textures_32 = read_tr_texture_pages_32(uncompressed_file_access, num_bump_textiles);
+		texture_type = TR_TEXTURE_TYPE_32;
 
 		// Font and Sky
 		uint32_t font_and_sky_decompressed_size = file->get_u32();
@@ -3001,73 +3518,137 @@ TRLevelData TRLevel::load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_l
 
 		file = TRFileAccess::create_from_buffer(other_decompressed_buffer);
 	} else {
-		if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
+		if (format == TR2_PC || format == TR3_PC) {
 			palette = read_tr_palette(file);
 			palette32 = read_tr_palette_32(file);
 		}
 
-		textures = read_tr_texture_pages(file, p_level_format);
+		Vector<PackedByteArray> textures = read_tr_texture_pages(file, format);
+		texture_type = TR_TEXTURE_TYPE_8_PAL;
+		level_textures = textures;
+		entity_textures = textures;
 	}
 
 	int32_t file_level_num = file->get_s32();
 
-	Vector<TRRoom> rooms = read_tr_rooms(file, p_level_format);
+	Vector<TRRoom> rooms = read_tr_rooms(file, format);
 
 	PackedByteArray floor_data = read_tr_floor_data(file);
 
-	TRTypes types = read_tr_types(file, p_level_format);
+	TRTypes types = read_tr_types(file, format);
 
+	if (format == TR4_PC) {
+		PackedByteArray spr_ident = file->get_buffer(3);
+	}
 	read_tr_sprites(file);
 
 	read_tr_cameras(file);
 
-	read_tr_flyby_cameras(file, p_level_format);
+	read_tr_flyby_cameras(file, format);
 
 	read_tr_sound_effects(file);
 
-	read_tr_nav_cells(file, p_level_format);
+	read_tr_nav_cells(file, format);
 
-	read_tr_animated_textures(file);
+	read_tr_animated_textures(file, format);
 
-	if (p_level_format == TR3_PC || p_level_format == TR4_PC) {
-		types.texture_infos = read_tr_texture_infos(file, p_level_format);
+	if (format == TR3_PC || format == TR4_PC) {
+		if (format == TR4_PC) {
+			PackedByteArray tex_ident = file->get_buffer(3);
+		}
+		types.texture_infos = read_tr_texture_infos(file, format);
 	}
 
-	Vector<TREntity> entities = read_tr_entities(file, p_level_format);
+	Vector<TREntity> entities = read_tr_entities(file, format);
 
-	read_tr_lightmap(file);
+	if (format == TR4_PC) {
+		read_tr_ai_objects(file, format);
+	}
 
-	if (p_level_format == TR1_PC) {
+	if (format == TR1_PC || format == TR2_PC || format == TR3_PC) {
+		read_tr_lightmap(file);
+	}
+
+	if (format == TR1_PC) {
 		palette = read_tr_palette(file);
 	}
 
-	if (p_level_format == TR1_PC || p_level_format == TR2_PC || p_level_format == TR3_PC) {
+	if (format == TR1_PC || format == TR2_PC || format == TR3_PC) {
 		read_tr_camera_frames(file);
-		read_tr_demo_frames(file);
 	}
 
-	Vector<uint16_t> sound_map = read_tr_sound_map(file, p_level_format);
+	read_tr_demo_frames(file);
+
+	Vector<uint16_t> sound_map = read_tr_sound_map(file, format);
 	types.sound_map = sound_map;
 
-	Vector<TRSoundInfo> sound_infos = read_tr_sound_infos(file, p_level_format);
+	Vector<TRSoundInfo> sound_infos = read_tr_sound_infos(file, format);
 	PackedByteArray sound_buffer;
 
-	if (p_level_format == TR1_PC) {
+	if (format == TR1_PC) {
 		sound_buffer = read_tr_sound_buffer(file);
 	}
 
 	PackedInt32Array sound_indices = read_tr_sound_indices(file);
 
-	if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
+	if (format == TR2_PC || format == TR3_PC) {
+		Error sfx_error;
+		String directory_path = level_path.get_base_dir();
+		Ref<TRFileAccess> sfx_file;
+		sfx_file = TRFileAccess::open(directory_path + "/MAIN.SFX", &sfx_error);
 
+		sound_buffer = sfx_file->get_buffer(sfx_file->get_size());
+		sfx_file->seek(0);
+
+		Vector<int32_t> wave_table;
+		// TODO: handle Remaster
+		for (int i = 0; i < 370; i++) {
+			if (sfx_file->get_fixed_string(4) == "RIFF") {
+				wave_table.append(sfx_file->get_position() - 4);
+				uint32_t file_size = sfx_file->get_u32();
+				if (file_size > 0) {
+					if (sfx_file->get_fixed_string(4) == "WAVE") {
+						if (sfx_file->get_fixed_string(4) == "fmt ") {
+							uint32_t length = sfx_file->get_u32();
+							uint16_t format_type = sfx_file->get_u16();
+							uint16_t channels = sfx_file->get_u16();
+							uint32_t mix_rate = sfx_file->get_u32();
+							uint32_t byte_per_second = sfx_file->get_u32();
+							uint16_t byte_per_block = sfx_file->get_u16();
+							uint16_t bits_per_sample = sfx_file->get_u16();
+
+							if (sfx_file->get_fixed_string(4) == "data") {
+								uint32_t buffer_size = sfx_file->get_u32();
+								sfx_file->seek(sfx_file->get_position() + buffer_size);
+							}
+						}
+					}
+				}
+			}
+		}
+		for (int i = 0; i < sound_indices.size(); i++) {
+			int32_t index = sound_indices.get(i);
+			if (index < wave_table.size()) {
+				sound_indices.set(i, wave_table.get(index));
+			} else {
+				sound_indices.set(i, -1);
+			}
+		}
+	}
+
+	if (format == TR4_PC) {
+		PackedByteArray seperator = file->get_buffer(6);
 	}
 
 #if 0
-	dump_8bit_textures(textures, palette);
+	dump_8bit_textures(room_textures, palette);
+	dump_8bit_textures(object_textures, palette);
 #endif
 
-	TRLevelData level_data;
-	level_data.textures = textures;
+	level_data.format = format;
+	level_data.texture_type = texture_type;
+	level_data.level_textures = level_textures;
+	level_data.entity_textures = entity_textures;
 	level_data.palette = palette;
 	level_data.rooms = rooms;
 	level_data.entities = entities;

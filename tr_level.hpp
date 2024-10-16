@@ -24,6 +24,7 @@ enum TRLevelFormat {
 };
 
 #include "tr_names.hpp"
+#include "tr_misc.hpp"
 #include "tr_types.h"
 
 const float TR_FPS = 30.0f;
@@ -45,5 +46,5 @@ public:
 
 	void clear_level();
 	void load_level(bool p_lara_only);
-	TRLevelData load_level_type(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format);
+	TRLevelData load_level_type(String file_path);
 };
