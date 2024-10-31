@@ -703,6 +703,72 @@ TRMesh read_tr_mesh(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	return tr_mesh;
 }
 
+struct TRInterpolatedFrame {
+	TRAnimFrame first_frame;
+	TRAnimFrame second_frame;
+	real_t interpolation;
+};
+
+TRInterpolatedFrame get_final_frame_for_animation(int32_t p_anim_idx, Vector<TRAnimation> &p_animations) {
+	TRInterpolatedFrame interpolated_frame;
+
+	ERR_FAIL_INDEX_V(p_anim_idx, p_animations.size(), interpolated_frame);
+
+	TRAnimation tr_animation_current = p_animations.get(p_anim_idx);
+	int32_t next_animation_number = tr_animation_current.next_animation_number;
+
+	ERR_FAIL_INDEX_V(next_animation_number, p_animations.size(), interpolated_frame);
+	TRAnimation tr_next_animation = p_animations.get(next_animation_number);
+
+	int32_t attempts_remaining = 128;
+	while (tr_next_animation.frames.size() == 0) {
+		ERR_FAIL_INDEX_V(next_animation_number, p_animations.size(), interpolated_frame);
+		tr_animation_current = tr_next_animation;
+		tr_next_animation = p_animations.get(next_animation_number);
+
+		attempts_remaining--;
+		ERR_FAIL_COND_V(attempts_remaining <= 0, interpolated_frame);
+	}
+
+	int32_t next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
+	int32_t next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
+
+	if (p_anim_idx == next_animation_number && tr_animation_current.next_frame_number == tr_animation_current.frame_end) {
+		interpolated_frame.interpolation = 0.0;
+		interpolated_frame.first_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
+		interpolated_frame.second_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
+	}
+	else {
+		if (tr_next_animation.frame_skip > 0) {
+			int32_t keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
+			ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), interpolated_frame);
+			interpolated_frame.first_frame = tr_next_animation.frames[keyframe_idx];
+			interpolated_frame.second_frame = tr_next_animation.frames[keyframe_idx];
+			if (next_keyframe_modulo > 0) {
+				interpolated_frame.first_frame = tr_next_animation.frames[keyframe_idx];
+
+				if (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
+					while (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
+						tr_next_animation = p_animations.get(next_animation_number);
+						keyframe_idx = 0;
+						interpolated_frame.second_frame = tr_next_animation.frames[keyframe_idx];
+					}
+				} else {
+					interpolated_frame.second_frame = tr_next_animation.frames[keyframe_idx + 1];
+				}
+
+				interpolated_frame.interpolation = real_t(next_keyframe_modulo) / real_t(tr_next_animation.frame_skip);
+			}
+		}
+		else {
+			ERR_FAIL_INDEX_V(next_frame_idx, tr_next_animation.frames.size(), interpolated_frame);
+			interpolated_frame.first_frame = interpolated_frame.second_frame = tr_next_animation.frames[next_frame_idx];
+		}
+	}
+
+	return interpolated_frame;
+}
+
 Node3D *create_godot_moveable_model(
 	uint32_t p_type_info_id,
 	TRMoveableInfo p_moveable_info,
@@ -870,6 +936,15 @@ Node3D *create_godot_moveable_model(
 				state_machine->add_node(animation_name, animation_node, Vector2(real_t(x_pos) * ANIMATION_GRAPH_SPACING, real_t(y_pos) * ANIMATION_GRAPH_SPACING));
 			}
 
+			Vector<bool> apply_180_rotation_on_final_frame;
+			Vector<bool> apply_180_rotation_on_first_frame;
+			apply_180_rotation_on_first_frame.resize(p_moveable_info.animations.size());
+			apply_180_rotation_on_final_frame.resize(p_moveable_info.animations.size());
+			for (size_t i = 0; i < p_moveable_info.animations.size(); i++) {
+				apply_180_rotation_on_first_frame.set(i, false);
+				apply_180_rotation_on_final_frame.set(i, false);
+			}
+
 			for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 				Ref<Animation> godot_animation = memnew(Animation);
 				TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
@@ -917,18 +992,22 @@ Node3D *create_godot_moveable_model(
 
 							Dictionary dispatch_dict;
 
+							real_t start_time = real_t(dispatch.start_frame - tr_animation.frame_base) / real_t(TR_FPS);
+							real_t end_time = real_t(dispatch.end_frame - tr_animation.frame_base) / real_t(TR_FPS);
+							real_t target_frame_time = real_t(dispatch.target_frame_number - new_tr_animation.frame_base) / real_t(TR_FPS);
+
 							dispatch_dict.set("start_frame", dispatch.start_frame - tr_animation.frame_base);
 							dispatch_dict.set("end_frame", dispatch.end_frame - tr_animation.frame_base);
 
-							dispatch_dict.set("start_time", real_t(dispatch.start_frame - tr_animation.frame_base) / real_t(TR_FPS));
-							dispatch_dict.set("end_time", real_t(dispatch.end_frame - tr_animation.frame_base) / real_t(TR_FPS));
+							dispatch_dict.set("start_time", start_time);
+							dispatch_dict.set("end_time", end_time);
 
 							String target_animation_name = get_animation_name(p_type_info_id, dispatch.target_animation_number - p_moveable_info.animation_index, p_level_format);
 
 							dispatch_dict.set("target_animation_id", dispatch.target_animation_number - p_moveable_info.animation_index);
-							dispatch_dict.set("target_animation_name", get_animation_name(p_type_info_id, dispatch.target_animation_number - p_moveable_info.animation_index, p_level_format));
+							dispatch_dict.set("target_animation_name", target_animation_name);
 							dispatch_dict.set("target_frame_number", dispatch.target_frame_number - new_tr_animation.frame_base);
-							dispatch_dict.set("target_frame_time", real_t(dispatch.target_frame_number - new_tr_animation.frame_base) / real_t(TR_FPS));
+							dispatch_dict.set("target_frame_time", target_frame_time);
 
 							Ref<AnimationNodeStateMachineTransition> transition = memnew(AnimationNodeStateMachineTransition);
 							transition->set_switch_mode(AnimationNodeStateMachineTransition::SWITCH_MODE_IMMEDIATE);
@@ -940,6 +1019,9 @@ Node3D *create_godot_moveable_model(
 							}
 
 							dispatches.append(dispatch_dict);
+
+							godot_animation->add_marker(vformat("frame_%d", dispatch.start_frame - tr_animation.frame_base), start_time);
+							godot_animation->add_marker(vformat("frame_%d", dispatch.end_frame - tr_animation.frame_base), end_time);
 						}
 						else {
 							ERR_PRINT("Target animation out of range.");
@@ -1071,6 +1153,14 @@ Node3D *create_godot_moveable_model(
 							// Flip effect
 							int16_t frame_number = p_types.animation_commands.get(command_offset++).command;
 							int16_t flipeffect_id = p_types.animation_commands.get(command_offset++).command;
+
+							if (flipeffect_id == 0) {
+								if (frame_number == tr_animation.frame_end) {
+									apply_180_rotation_on_final_frame.set(anim_idx, true);
+								} else if (frame_number == tr_animation.frame_base) {
+									apply_180_rotation_on_first_frame.set(anim_idx, true);
+								}
+							}
 
 							Dictionary dict;
 							dict.set("command_name", "play_flipeffect");
@@ -1299,8 +1389,7 @@ Node3D *create_godot_moveable_model(
 							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 0.0, Vector3(1.0, 1.0, 1.0));
 							reset_animation->scale_track_insert_key(reset_animation->get_track_count() - 1, 1.0, Vector3(1.0, 1.0, 1.0));
 
-						}
-						else {
+						} else {
 							if (mesh_idx == 0) {
 								bool uses_motion_scale = does_type_use_motion_scale(p_type_info_id, p_level_format);
 								if (uses_motion_scale) {
@@ -1330,6 +1419,8 @@ Node3D *create_godot_moveable_model(
 						}
 					}
 
+					const int32_t EXTRA_FRAMES = 1;
+
 					for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 						TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
 						Ref<Animation> godot_animation = godot_animations[anim_idx];
@@ -1355,28 +1446,54 @@ Node3D *create_godot_moveable_model(
 							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path) + ":shape:size"));
 							int32_t shape_size_track_idx = godot_animation->get_track_count() - 1;
 
-							int32_t frame_counter = 0;
+							int32_t frame_counter = 1;
 							int32_t frame_skips = 1;
 
 							end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
 							end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
 
-							for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size(); frame_idx++) {
-								if (frame_idx == 0 || tr_animation.acceleration != 0 || tr_animation.lateral_acceleration != 0) {
-									godot_animation->position_track_insert_key(root_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+							for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size() + EXTRA_FRAMES; frame_idx++) {
+
+								if (frame_idx < tr_animation.frames.size()) {
+									if (frame_idx == 0 || tr_animation.acceleration != 0 || tr_animation.lateral_acceleration != 0) {
+										godot_animation->position_track_insert_key(root_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+									}
+
+									for (; frame_skips < tr_animation.frame_skip; frame_skips++) {
+										end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
+										end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
+										frame_counter++;
+									}
+									frame_skips = 0;
 								}
 
-								for (; frame_skips < tr_animation.frame_skip; frame_skips++) {
-									end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
-									end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
-									frame_counter++;
+								Vector3 gd_bbox_min;
+								Vector3 gd_bbox_max;
+
+								if (frame_idx == tr_animation.frames.size()) {
+									if (godot_animation->get_loop_mode() == Animation::LOOP_LINEAR) {
+										ERR_FAIL_INDEX_V(0, tr_animation.frames.size(), nullptr);
+										TRAnimFrame first_frame = tr_animation.frames[0];
+										gd_bbox_min = Vector3(first_frame.bounding_box.x_min * TR_TO_GODOT_SCALE, first_frame.bounding_box.y_min * TR_TO_GODOT_SCALE, first_frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
+										gd_bbox_max = Vector3(first_frame.bounding_box.x_max * TR_TO_GODOT_SCALE, first_frame.bounding_box.y_max * TR_TO_GODOT_SCALE, first_frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
+									}
+									else if (godot_animation->get_loop_mode() == Animation::LOOP_NONE) {
+										TRInterpolatedFrame interpolated_frame = get_final_frame_for_animation(anim_idx, p_types.animations);
+
+										Vector3 gd_bbox_min_a = Vector3(interpolated_frame.first_frame.bounding_box.x_min * TR_TO_GODOT_SCALE, interpolated_frame.first_frame.bounding_box.y_min * TR_TO_GODOT_SCALE, interpolated_frame.first_frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
+										Vector3 gd_bbox_max_a = Vector3(interpolated_frame.first_frame.bounding_box.x_max * TR_TO_GODOT_SCALE, interpolated_frame.first_frame.bounding_box.y_max * TR_TO_GODOT_SCALE, interpolated_frame.first_frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
+
+										Vector3 gd_bbox_min_b = Vector3(interpolated_frame.second_frame.bounding_box.x_min * TR_TO_GODOT_SCALE, interpolated_frame.second_frame.bounding_box.y_min * TR_TO_GODOT_SCALE, interpolated_frame.second_frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
+										Vector3 gd_bbox_max_b = Vector3(interpolated_frame.second_frame.bounding_box.x_max * TR_TO_GODOT_SCALE, interpolated_frame.second_frame.bounding_box.y_max * TR_TO_GODOT_SCALE, interpolated_frame.second_frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
+
+										gd_bbox_min = gd_bbox_min_a.lerp(gd_bbox_min_b, interpolated_frame.interpolation);
+										gd_bbox_max = gd_bbox_max_a.lerp(gd_bbox_max_b, interpolated_frame.interpolation);
+									}
+								} else {
+									TRAnimFrame frame = tr_animation.frames.get(frame_idx);
+									gd_bbox_min = Vector3(frame.bounding_box.x_min * TR_TO_GODOT_SCALE, frame.bounding_box.y_min * TR_TO_GODOT_SCALE, frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
+									gd_bbox_max = Vector3(frame.bounding_box.x_max * TR_TO_GODOT_SCALE, frame.bounding_box.y_max * TR_TO_GODOT_SCALE, frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
 								}
-								frame_skips = 0;
-
-								TRAnimFrame frame = tr_animation.frames.get(frame_idx);
-
-								Vector3 gd_bbox_min = Vector3(frame.bounding_box.x_min * TR_TO_GODOT_SCALE, frame.bounding_box.y_min * TR_TO_GODOT_SCALE, frame.bounding_box.z_min * TR_TO_GODOT_SCALE);
-								Vector3 gd_bbox_max = Vector3(frame.bounding_box.x_max * TR_TO_GODOT_SCALE, frame.bounding_box.y_max * TR_TO_GODOT_SCALE, frame.bounding_box.z_max * TR_TO_GODOT_SCALE);
 
 								Vector3 gd_bbox_position = (gd_bbox_min + gd_bbox_max) / 2.0;
 								Vector3 gd_bbox_scale = gd_bbox_max - gd_bbox_min;
@@ -1397,7 +1514,7 @@ Node3D *create_godot_moveable_model(
 								godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
 							}
 
-							TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number);
+							TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number - p_moveable_info.animation_index);
 							int32_t next_frame_number = tr_animation.next_frame_number - tr_next_animation.frame_base;
 
 							// TODO: handle interpolation.
@@ -1405,7 +1522,7 @@ Node3D *create_godot_moveable_model(
 							end_pos_x -= ((tr_next_animation.lateral_velocity + (tr_next_animation.lateral_acceleration * next_frame_number)) >> 16);
 							end_pos_z -= ((tr_next_animation.velocity + (tr_next_animation.acceleration * next_frame_number)) >> 16);
 
-							godot_animation->position_track_insert_key(root_position_track_idx, animation_length, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+							godot_animation->position_track_insert_key(root_position_track_idx, animation_length, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) * motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
 
 							godot_animation->add_track(Animation::TYPE_ROTATION_3D);
 							int32_t root_rotation_track_idx = godot_animation->get_track_count() - 1;
@@ -1414,8 +1531,6 @@ Node3D *create_godot_moveable_model(
 							godot_animation->rotation_track_insert_key(root_rotation_track_idx, 0.0, Quaternion());
 							godot_animation->rotation_track_insert_key(root_rotation_track_idx, animation_length, Quaternion());
 						}
-
-						int32_t extra_frames = 1;
 
 						int32_t position_track_idx = -1;
 						if (mesh_idx == 0) {
@@ -1428,64 +1543,22 @@ Node3D *create_godot_moveable_model(
 						int32_t rotation_track_idx = godot_animation->get_track_count() - 1;
 						godot_animation->track_set_path(rotation_track_idx, NodePath(String(skeleton_path) + ":" + bone_name));
 
-						for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size() + extra_frames; frame_idx++) {
-
+						for (int32_t frame_idx = 0; frame_idx < tr_animation.frames.size() + EXTRA_FRAMES; frame_idx++) {
 							real_t interpolation = 0.0;
 							TRAnimFrame first_anim_frame;
 							TRAnimFrame second_anim_frame;
 
 							if (frame_idx >= tr_animation.frames.size()) {
+								int32_t next_animation_number = tr_animation.next_animation_number - p_moveable_info.animation_index;
+
 								if (godot_animation->get_loop_mode() == Animation::LOOP_LINEAR) {
 									ERR_FAIL_INDEX_V(0, tr_animation.frames.size(), nullptr);
 									first_anim_frame = second_anim_frame = tr_animation.frames[0];
 								} else if (godot_animation->get_loop_mode() == Animation::LOOP_NONE) {
-									ERR_FAIL_INDEX_V(tr_animation.next_animation_number, p_types.animations.size(), nullptr);
-									TRAnimation tr_animation_current = tr_animation;
-									TRAnimation tr_next_animation = p_types.animations.get(tr_animation_current.next_animation_number);
-									
-									int32_t attempts_remaining = 128;
-									while (tr_next_animation.frames.size() == 0) {
-										ERR_FAIL_INDEX_V(tr_next_animation.next_animation_number, p_types.animations.size(), nullptr);
-										tr_animation_current = tr_next_animation;
-										tr_next_animation = p_types.animations.get(tr_next_animation.next_animation_number);
-
-										attempts_remaining--;
-										ERR_FAIL_COND_V(attempts_remaining <= 0, nullptr);
-									}
-
-									int32_t next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
-									int32_t next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
-
-									if (anim_idx == tr_animation_current.next_animation_number && tr_animation.next_frame_number == tr_animation.frame_end) {
-										interpolation = 0.0;
-										first_anim_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
-										second_anim_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
-									} else {
-										if (tr_next_animation.frame_skip > 0) {
-											int32_t keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
-											ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), nullptr);
-											first_anim_frame = tr_next_animation.frames[keyframe_idx];
-											second_anim_frame = tr_next_animation.frames[keyframe_idx];
-											if (next_keyframe_modulo > 0) {
-												first_anim_frame = tr_next_animation.frames[keyframe_idx];
-
-												if (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
-													while (keyframe_idx + 1 >= tr_next_animation.frames.size()) {
-														tr_next_animation = p_types.animations.get(tr_next_animation.next_animation_number);
-														keyframe_idx = 0;
-														second_anim_frame = tr_next_animation.frames[keyframe_idx];
-													}
-												} else {
-													second_anim_frame = tr_next_animation.frames[keyframe_idx + 1];
-												}
-
-												interpolation = real_t(next_keyframe_modulo) / real_t(tr_next_animation.frame_skip);
-											}
-										} else {
-											ERR_FAIL_INDEX_V(next_frame_idx, tr_next_animation.frames.size(), nullptr);
-											first_anim_frame = second_anim_frame = tr_next_animation.frames[next_frame_idx];
-										}
-									}
+									TRInterpolatedFrame interpolated_frame = get_final_frame_for_animation(anim_idx, p_types.animations);
+									interpolation = interpolated_frame.interpolation;
+									first_anim_frame = interpolated_frame.first_frame;
+									second_anim_frame = interpolated_frame.second_frame;
 								}
 								if (mesh_idx == 0) {
 									TRTransform first_hips_transform = second_anim_frame.transforms.get(0);
@@ -1498,6 +1571,28 @@ Node3D *create_godot_moveable_model(
 									second_hips_transform.pos.x += (animation_position_offsets.get(anim_idx).x);
 									second_hips_transform.pos.y += (animation_position_offsets.get(anim_idx).y);
 									second_hips_transform.pos.z += (animation_position_offsets.get(anim_idx).z);
+
+									if (apply_180_rotation_on_final_frame.get(anim_idx)) {
+										first_hips_transform.rot.y -= 0x7fff;
+										first_hips_transform.pos.z = -first_hips_transform.pos.z;
+
+										second_hips_transform.rot.y -= 0x7fff;
+										second_hips_transform.pos.z = -second_hips_transform.pos.z;
+									}
+
+									TRAnimation tr_animation_current = tr_animation;
+									TRAnimation tr_next_animation = p_types.animations.get(next_animation_number);
+									int32_t next_frame_idx = (tr_animation_current.next_frame_number - tr_next_animation.frame_base);
+
+									if (apply_180_rotation_on_first_frame.size() > next_animation_number) {
+										if (apply_180_rotation_on_first_frame[next_animation_number] && next_frame_idx == 0) {
+											first_hips_transform.rot.y -= 0x7fff;
+											first_hips_transform.pos.z = -first_hips_transform.pos.z;
+
+											second_hips_transform.rot.y -= 0x7fff;
+											second_hips_transform.pos.z = -second_hips_transform.pos.z;
+										}
+									}
 
 									first_anim_frame.transforms.set(mesh_idx, first_hips_transform);
 									second_anim_frame.transforms.set(mesh_idx, second_hips_transform);
