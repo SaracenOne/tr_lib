@@ -842,37 +842,17 @@ Node3D *create_godot_moveable_model(
 
 			avatar_bounds->add_child(collision_shape);
 
-			for (int i = 0; i < 8; i++) {
-				Marker3D * bounds_marker = memnew(Marker3D);
-				String marker_name = "";
-				switch (i) {
-					case 0:
-						marker_name = "BoundsFrontBottomLeft";
-						break;
-					case 1:
-						marker_name = "BoundsFrontBottomRight";
-						break;
-					case 2:
-						marker_name = "BoundsFrontTopLeft";
-						break;
-					case 3:
-						marker_name = "BoundsFrontTopRight";
-						break;
-					case 4:
-						marker_name = "BoundsBackBottomLeft";
-						break;
-					case 5:
-						marker_name = "BoundsBackBottomRight";
-						break;
-					case 6:
-						marker_name = "BoundsBackTopLeft";
-						break;
-					case 7:
-						marker_name = "BoundsBackTopRight";
-						break;
-				}
-				bounds_marker->set_name(marker_name);
-				scaled_root->add_child(bounds_marker);
+			Marker3D* grip_center_position = memnew(Marker3D);
+			grip_center_position->set_name("GripPointCenter");
+			Marker3D *camera_target = memnew(Marker3D);
+			camera_target->set_name("CameraTarget");
+
+			scaled_root->add_child(grip_center_position);
+			scaled_root->add_child(camera_target);
+
+			if (p_use_unique_names) {
+				grip_center_position->set_unique_name_in_owner(true);
+				camera_target->set_unique_name_in_owner(true);
 			}
 
 			AnimationPlayer *animation_player = memnew(AnimationPlayer);
@@ -892,8 +872,12 @@ Node3D *create_godot_moveable_model(
 			ERR_FAIL_COND_V(!animation_root_node, nullptr);
 
 			NodePath skeleton_path = animation_root_node->get_path_to(skeleton);
+			NodePath grip_center_position_path = animation_root_node->get_path_to(grip_center_position);
+			NodePath camera_target_path = animation_root_node->get_path_to(camera_target);
 			if (p_use_unique_names) {
 				skeleton_path = NodePath("%GeneralSkeleton");
+				grip_center_position_path = NodePath("%GripPointCenter");
+				camera_target_path = NodePath("%CameraTarget");
 			}
 			NodePath shape_path = animation_root_node->get_path_to(collision_shape);
 
@@ -1446,6 +1430,15 @@ Node3D *create_godot_moveable_model(
 							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(shape_path) + ":shape:size"));
 							int32_t shape_size_track_idx = godot_animation->get_track_count() - 1;
 
+							// Bounds points
+							godot_animation->add_track(Animation::TYPE_POSITION_3D);
+							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(grip_center_position_path)));
+							int32_t grip_center_position_track_idx = godot_animation->get_track_count() - 1;
+
+							godot_animation->add_track(Animation::TYPE_POSITION_3D);
+							godot_animation->track_set_path(godot_animation->get_track_count() - 1, NodePath(String(camera_target_path)));
+							int32_t camera_target_track_idx = godot_animation->get_track_count() - 1;
+
 							int32_t frame_counter = 1;
 							int32_t frame_skips = 1;
 
@@ -1462,6 +1455,9 @@ Node3D *create_godot_moveable_model(
 									for (; frame_skips < tr_animation.frame_skip; frame_skips++) {
 										end_pos_x -= (tr_animation.lateral_velocity + (tr_animation.lateral_acceleration * frame_counter)) >> 16;
 										end_pos_z -= (tr_animation.velocity + (tr_animation.acceleration * frame_counter)) >> 16;
+
+										godot_animation->position_track_insert_key(root_position_track_idx, (1.0 / TR_FPS)* frame_counter, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+
 										frame_counter++;
 									}
 									frame_skips = 0;
@@ -1512,6 +1508,12 @@ Node3D *create_godot_moveable_model(
 
 								godot_animation->position_track_insert_key(shape_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_position);
 								godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
+
+								Vector3 center_grip_point = Vector3(0.0, -gd_bbox_min.y, gd_bbox_max.z) / motion_scale;
+								Vector3 camera_target = Vector3(0.0, gd_bbox_position.y + (256 * TR_TO_GODOT_SCALE), 0.0);
+
+								godot_animation->position_track_insert_key(grip_center_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, center_grip_point);
+								godot_animation->position_track_insert_key(camera_target_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, camera_target);
 							}
 
 							TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number - p_moveable_info.animation_index);
@@ -3674,17 +3676,28 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 
 	read_tr_demo_frames(file);
 
-	Vector<uint16_t> sound_map = read_tr_sound_map(file, format);
+
+	Vector<uint16_t> sound_map; 
+	if (format != TR4_PC) {
+		sound_map = read_tr_sound_map(file, format);
+	}
 	types.sound_map = sound_map;
 
-	Vector<TRSoundInfo> sound_infos = read_tr_sound_infos(file, format);
+	Vector<TRSoundInfo> sound_infos;
+	if (format != TR4_PC) {
+		sound_infos = read_tr_sound_infos(file, format);
+	}
+
 	PackedByteArray sound_buffer;
 
 	if (format == TR1_PC) {
 		sound_buffer = read_tr_sound_buffer(file);
 	}
 
-	PackedInt32Array sound_indices = read_tr_sound_indices(file);
+	PackedInt32Array sound_indices;
+	if (format != TR4_PC) {
+		sound_indices = read_tr_sound_indices(file);
+	}
 
 	if (format == TR2_PC || format == TR3_PC) {
 		Error sfx_error;
