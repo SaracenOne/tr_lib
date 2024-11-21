@@ -58,13 +58,13 @@ Transform3D tr_transform_to_godot_transform(TRTransform p_tr_transform) {
 		p_tr_transform.pos.y * -TR_TO_GODOT_SCALE,
 		p_tr_transform.pos.z * -TR_TO_GODOT_SCALE);
 
-	float rot_y_deg = (float)(p_tr_transform.rot.y) / 16384.0f * -90.0f;
-	float rot_x_deg = (float)(p_tr_transform.rot.x) / 16384.0f * 90.0f;
-	float rot_z_deg = (float)(p_tr_transform.rot.z) / 16384.0f * -90.0f;
+	real_t rot_y_deg = (real_t)(p_tr_transform.rot.y) / 16384.0f * -90.0f;
+	real_t rot_x_deg = (real_t)(p_tr_transform.rot.x) / 16384.0f * 90.0f;
+	real_t rot_z_deg = (real_t)(p_tr_transform.rot.z) / 16384.0f * -90.0f;
 
-	float rot_y_rad = Math::deg_to_rad(rot_y_deg);
-	float rot_x_rad = Math::deg_to_rad(rot_x_deg);
-	float rot_z_rad = Math::deg_to_rad(rot_z_deg);
+	real_t rot_y_rad = Math::deg_to_rad(rot_y_deg);
+	real_t rot_x_rad = Math::deg_to_rad(rot_x_deg);
+	real_t rot_z_rad = Math::deg_to_rad(rot_z_deg);
 
 	Basis rotation_basis;
 	rotation_basis.rotate(Vector3(rot_x_rad, rot_y_rad, rot_z_rad), EulerOrder::YXZ);
@@ -150,11 +150,14 @@ TRRoomVertex read_tr_room_vertex(Ref<TRFileAccess> p_file, TRLevelFormat p_forma
 
 	if (p_format == TR3_PC || p_format == TR4_PC) {
 		room_vertex.color = tr_color_shade_to_godot_color(second_shade_value);
+		if (p_format == TR3_PC) {
+			room_vertex.color /= 2.0;
+		}
 		room_vertex.color2 = room_vertex.color;
 	} else {
-		room_vertex.color = tr_monochrome_shade_to_godot_color(first_shade_value);
+		room_vertex.color = tr_monochrome_shade_to_godot_color(first_shade_value) / 2.0;
 		if (p_format == TR2_PC) {
-			room_vertex.color2 = tr_monochrome_shade_to_godot_color(second_shade_value);
+			room_vertex.color2 = tr_monochrome_shade_to_godot_color(second_shade_value) / 2.0;
 		} else {
 			room_vertex.color2 = room_vertex.color;
 		}
@@ -909,7 +912,7 @@ Node3D *create_godot_moveable_model(
 
 #define ANIMATION_GRAPH_SPACING 256.0
 			size_t grid_size = size_t(Math::floor(Math::sqrt(real_t(p_moveable_info.animations.size()))));
-			for (int32_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+			for (int64_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 				String animation_name = get_animation_name(p_type_info_id, anim_idx, p_level_format);
 				Ref<AnimationNodeAnimation> animation_node = memnew(AnimationNodeAnimation);
 				animation_node->set_animation(animation_name);
@@ -924,12 +927,12 @@ Node3D *create_godot_moveable_model(
 			Vector<bool> apply_180_rotation_on_first_frame;
 			apply_180_rotation_on_first_frame.resize(p_moveable_info.animations.size());
 			apply_180_rotation_on_final_frame.resize(p_moveable_info.animations.size());
-			for (size_t i = 0; i < p_moveable_info.animations.size(); i++) {
+			for (int64_t i = 0; i < p_moveable_info.animations.size(); i++) {
 				apply_180_rotation_on_first_frame.set(i, false);
 				apply_180_rotation_on_final_frame.set(i, false);
 			}
 
-			for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+			for (int64_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 				Ref<Animation> godot_animation = memnew(Animation);
 				TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
 
@@ -948,15 +951,14 @@ Node3D *create_godot_moveable_model(
 					godot_animation->set_loop_mode(Animation::LOOP_NONE);
 				}
 
-
-				godot_animation->set_length(animation_length);
+				godot_animation->set_length(((tr_animation.frame_end - tr_animation.frame_base) + 1) / TR_FPS);
 				
 				animation_library->add_animation(get_animation_name(p_type_info_id, anim_idx, p_level_format), godot_animation);
 
 				Array animation_state_changes;
 
 				int16_t state_change_index = tr_animation.state_change_index;
-				for (size_t state_change_offset_idx = 0; state_change_offset_idx < tr_animation.number_state_changes; state_change_offset_idx++) {
+				for (int64_t state_change_offset_idx = 0; state_change_offset_idx < tr_animation.number_state_changes; state_change_offset_idx++) {
 					ERR_FAIL_INDEX_V(state_change_index + state_change_offset_idx, p_types.animation_state_changes.size(), nullptr);
 
 					TRAnimationStateChange state_change = p_types.animation_state_changes.get(state_change_index + state_change_offset_idx);
@@ -967,7 +969,7 @@ Node3D *create_godot_moveable_model(
 					state_change_dict.set("target_animation_state", target_animation_state);
 
 					Array dispatches;
-					for (size_t dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
+					for (int64_t dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
 						ERR_FAIL_INDEX_V(dispatch_index + dispatch_offset_idx, p_types.animation_dispatches.size(), nullptr);
 						TRAnimationDispatch dispatch = p_types.animation_dispatches.get(dispatch_index + dispatch_offset_idx);
 						if (dispatch.target_animation_number >= p_moveable_info.animation_index
@@ -1166,7 +1168,7 @@ Node3D *create_godot_moveable_model(
 				godot_animation->set_meta("tr_animation_next_animation_id", tr_animation.next_animation_number - p_moveable_info.animation_index);
 				godot_animation->set_meta("tr_animation_next_animation_name", get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index, p_level_format));
 				godot_animation->set_meta("tr_animation_next_frame", tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base);
-				godot_animation->set_meta("tr_animation_next_time", float(tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base) / real_t(TR_FPS));
+				godot_animation->set_meta("tr_animation_next_time", real_t(tr_animation.next_frame_number - p_types.animations.get(tr_animation.next_animation_number).frame_base) / real_t(TR_FPS));
 				
 				godot_animation->set_meta("tr_animation_velocity_tr_units", tr_animation.velocity);
 				godot_animation->set_meta("tr_animation_acceleration_tr_units", tr_animation.acceleration);
@@ -1211,7 +1213,7 @@ Node3D *create_godot_moveable_model(
 
 			mesh_transforms.resize(p_moveable_info.mesh_count);
 
-			for (size_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
+			for (int64_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
 				int32_t offset_mesh_index = p_moveable_info.mesh_index + mesh_idx;
 				if (offset_mesh_index < p_meshes.size()) {
 					Transform3D transform_offset;
@@ -1284,7 +1286,7 @@ Node3D *create_godot_moveable_model(
 			bone_post_transforms.resize(skeleton->get_bone_count());
 
 			if (does_overwrite_mesh_rotation(p_type_info_id, p_level_format)) {
-				for (size_t bone_idx = 0; bone_idx < skeleton->get_bone_count(); bone_idx++) {
+				for (int64_t bone_idx = 0; bone_idx < skeleton->get_bone_count(); bone_idx++) {
 					if (bone_idx > 0) {
 						Transform3D diff;
 						if (bone_to_mesh_mapping.has(bone_idx)) {
@@ -1315,7 +1317,7 @@ Node3D *create_godot_moveable_model(
 			}
 
 
-			for (size_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
+			for (int64_t mesh_idx = 0; mesh_idx < p_moveable_info.mesh_count; mesh_idx++) {
 				int32_t offset_mesh_index = p_moveable_info.mesh_index + mesh_idx;
 				int32_t bone_idx = mesh_to_bone_mapping[mesh_idx];
 
@@ -1405,7 +1407,7 @@ Node3D *create_godot_moveable_model(
 
 					const int32_t EXTRA_FRAMES = 1;
 
-					for (size_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
+					for (int64_t anim_idx = 0; anim_idx < p_moveable_info.animations.size(); anim_idx++) {
 						TRAnimation tr_animation = p_moveable_info.animations.get(anim_idx);
 						Ref<Animation> godot_animation = godot_animations[anim_idx];
 
@@ -1449,7 +1451,7 @@ Node3D *create_godot_moveable_model(
 
 								if (frame_idx < tr_animation.frames.size()) {
 									if (frame_idx == 0 || tr_animation.acceleration != 0 || tr_animation.lateral_acceleration != 0) {
-										godot_animation->position_track_insert_key(root_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
+										godot_animation->position_track_insert_key(root_position_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, Vector3((-double(end_pos_x) * TR_TO_GODOT_SCALE) / motion_scale, 0.0, (-double(end_pos_z) * TR_TO_GODOT_SCALE) / motion_scale));
 									}
 
 									for (; frame_skips < tr_animation.frame_skip; frame_skips++) {
@@ -1506,14 +1508,14 @@ Node3D *create_godot_moveable_model(
 								gd_bbox_scale.y /= motion_scale;
 								gd_bbox_scale.z /= motion_scale;
 
-								godot_animation->position_track_insert_key(shape_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_position);
-								godot_animation->track_insert_key(shape_size_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
+								godot_animation->position_track_insert_key(shape_position_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_position);
+								godot_animation->track_insert_key(shape_size_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, gd_bbox_scale);
 
 								Vector3 center_grip_point = Vector3(0.0, -gd_bbox_min.y, gd_bbox_max.z) / motion_scale;
 								Vector3 camera_target = Vector3(0.0, gd_bbox_position.y + (256 * TR_TO_GODOT_SCALE), 0.0);
 
-								godot_animation->position_track_insert_key(grip_center_position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, center_grip_point);
-								godot_animation->position_track_insert_key(camera_target_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, camera_target);
+								godot_animation->position_track_insert_key(grip_center_position_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, center_grip_point);
+								godot_animation->position_track_insert_key(camera_target_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, camera_target);
 							}
 
 							TRAnimation tr_next_animation = p_types.animations.get(tr_animation.next_animation_number - p_moveable_info.animation_index);
@@ -1563,8 +1565,14 @@ Node3D *create_godot_moveable_model(
 									second_anim_frame = interpolated_frame.second_frame;
 								}
 								if (mesh_idx == 0) {
-									TRTransform first_hips_transform = second_anim_frame.transforms.get(0);
-									TRTransform second_hips_transform = second_anim_frame.transforms.get(0);
+									TRTransform first_hips_transform;
+									if (second_anim_frame.transforms.size()) {
+										first_hips_transform = second_anim_frame.transforms.get(0);
+									}
+									TRTransform second_hips_transform;
+									if (second_anim_frame.transforms.size()) {
+										second_hips_transform = second_anim_frame.transforms.get(0);
+									}
 
 									first_hips_transform.pos.x += (animation_position_offsets.get(anim_idx).x);
 									first_hips_transform.pos.y += (animation_position_offsets.get(anim_idx).y);
@@ -1596,8 +1604,12 @@ Node3D *create_godot_moveable_model(
 										}
 									}
 
-									first_anim_frame.transforms.set(mesh_idx, first_hips_transform);
-									second_anim_frame.transforms.set(mesh_idx, second_hips_transform);
+									if (first_anim_frame.transforms.size() > mesh_idx) {
+										first_anim_frame.transforms.set(mesh_idx, first_hips_transform);
+									}
+									if (second_anim_frame.transforms.size() > mesh_idx) {
+										second_anim_frame.transforms.set(mesh_idx, second_hips_transform);
+									}
 								}
 							} else {
 								ERR_FAIL_INDEX_V(frame_idx, tr_animation.frames.size(), nullptr);
@@ -1624,10 +1636,10 @@ Node3D *create_godot_moveable_model(
 							final_transform = bone_pre_transforms.get(bone_idx) * final_transform * bone_post_transforms.get(bone_idx);
 
 							if (position_track_idx >= 0) {
-								godot_animation->position_track_insert_key(position_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.origin);
+								godot_animation->position_track_insert_key(position_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.origin);
 							}
 							if (rotation_track_idx >= 0) {
-								godot_animation->rotation_track_insert_key(rotation_track_idx, (float)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.basis.get_quaternion());
+								godot_animation->rotation_track_insert_key(rotation_track_idx, (real_t)(frame_idx / TR_FPS) * tr_animation.frame_skip, final_transform.basis.get_quaternion());
 							}
 						}
 					}
@@ -1847,7 +1859,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	for (int32_t i = 0; i < moveable_infos.size() - 1; i++) {
 		TRMoveableInfo moveable_info = moveable_infos[i];
 
-		for (size_t animation_idx = 0; animation_idx < moveable_info.animation_count; animation_idx++) {
+		for (int64_t animation_idx = 0; animation_idx < moveable_info.animation_count; animation_idx++) {
 			if (moveable_info.animation_index + animation_idx >= tr_types.animations.size()) {
 				continue;
 			}
@@ -1860,7 +1872,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 			
 			int32_t frame_ptr = animation.frame_offset;
 
-			for (size_t frame_idx = 0; frame_idx < frame_count; frame_idx++) {
+			for (int64_t frame_idx = 0; frame_idx < frame_count; frame_idx++) {
 				// This may be wrong
 
 				if (animation.frame_size > 0) {
@@ -1995,7 +2007,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 		moveable_infos.set(i, moveable_info);
 	}
 
-	for (size_t i = 0; i < id_list.size(); i++) {
+	for (int64_t i = 0; i < id_list.size(); i++) {
 		tr_types.moveable_info_map[id_list[i]] = moveable_infos[i];
 	}
 
@@ -2004,7 +2016,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	// Statics Count
 	HashMap<int32_t, TRStaticInfo > static_map;
 	int32_t static_count = p_file->get_s32();
-	for (size_t i = 0; i < static_count; i++) {
+	for (int64_t i = 0; i < static_count; i++) {
 		int32_t static_id = p_file->get_u32();
 		
 		TRStaticInfo static_info;
@@ -2100,7 +2112,7 @@ void read_tr_cameras(Ref<TRFileAccess> p_file) {
 void read_tr_flyby_cameras(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	if (p_level_format == TR4_PC) {
 		int32_t num_flyby_cameras = p_file->get_u32();
-		for (int i = 0; i < num_flyby_cameras; i++) {
+		for (int32_t i = 0; i < num_flyby_cameras; i++) {
 			TRPos pos = read_tr_pos(p_file);
 			TRPos angles = read_tr_pos(p_file);
 			uint8_t sequence = p_file->get_u8();
@@ -2187,7 +2199,7 @@ void read_tr_animated_textures(Ref<TRFileAccess> p_file, TRLevelFormat p_level_f
 void read_tr_ai_objects(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	if (p_level_format == TR4_PC) {
 		uint32_t ai_object_count = p_file->get_u32();
-		for (int i = 0; i < ai_object_count; i++) {
+		for (int64_t i = 0; i < ai_object_count; i++) {
 			uint16_t type_id = p_file->get_u16();
 			uint16_t room = p_file->get_u16();
 			TRPos pos = read_tr_pos(p_file);
@@ -2327,7 +2339,7 @@ PackedInt32Array read_tr_sound_indices(Ref<TRFileAccess> p_file) {
 	uint32_t indices_count = p_file->get_u32();
 	PackedInt32Array pi32array;
 	pi32array.resize(indices_count);
-	for (int32_t i = 0; i < indices_count; i++) {
+	for (int64_t i = 0; i < indices_count; i++) {
 		pi32array.set(i, p_file->get_u32());
 	}
 
@@ -2378,7 +2390,7 @@ struct GeometryShift {
 	int8_t x_floor_shift = 0;
 	int8_t z_ceiling_shift = 0;
 	int8_t x_ceiling_shift = 0;
-	bool is_portal = false;
+	uint8_t portal_room = 0xff;
 };
 
 static GeometryShift parse_floor_data_entry(PackedByteArray p_floor_data, uint16_t p_index) {
@@ -2409,7 +2421,7 @@ static GeometryShift parse_floor_data_entry(PackedByteArray p_floor_data, uint16
 		switch (function) {
 			case 0x01: {
 				printf("portal\n");
-				geo_shift.is_portal = true;
+				geo_shift.portal_room = p_floor_data.get(p_index * 2);
 				p_index++;
 				break;
 			}
@@ -2474,11 +2486,11 @@ static GeometryShift parse_floor_data_entry(PackedByteArray p_floor_data, uint16
 	return geo_shift;
 }
 
-static float u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
+static real_t u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
 	if (no_fraction) {
-		return (float)((p_fixed & 0xff00) >> 8) + (float)((p_fixed & 0x00ff) / 255.0f);
+		return (real_t)((p_fixed & 0xff00) >> 8) + (real_t)((p_fixed & 0x00ff) / 255.0f);
 	} else {
-		return (float)((p_fixed & 0xff00) >> 8);
+		return (real_t)((p_fixed & 0xff00) >> 8);
 	}
 }
 
@@ -2490,7 +2502,7 @@ static float u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
 	vert_and_uv.uv = p_uv;\
 	int32_t result = -1;\
 	int32_t vertex_id_map_size = p_vertex_id_list.size();\
-	for (size_t idx = 0; idx < vertex_id_map_size; idx++) {\
+	for (int64_t idx = 0; idx < vertex_id_map_size; idx++) {\
 		VertexAndUV new_vert_and_uv = p_vertex_id_list.get(idx);\
 		if (new_vert_and_uv.vertex_idx == vert_and_uv.vertex_idx &&\
 				new_vert_and_uv.uv.u == vert_and_uv.uv.u &&\
@@ -2514,7 +2526,7 @@ static float u_fixed_16_to_float(uint16_t p_fixed, bool no_fraction) {
 	vert_and_uv.uv = p_uv;\
 	int32_t result = -1;\
 	int32_t vertex_uv_map_size = p_vertex_uv_map.get(p_texture_page).size();\
-	for (size_t idx = 0; idx < vertex_uv_map_size; idx++) {\
+	for (int64_t idx = 0; idx < vertex_uv_map_size; idx++) {\
 		VertexAndUV new_vert_and_uv = p_vertex_uv_map.get(p_texture_page).get(idx);\
 		if (new_vert_and_uv.vertex_idx == vert_and_uv.vertex_idx &&\
 				new_vert_and_uv.uv.u == vert_and_uv.uv.u &&\
@@ -2618,7 +2630,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 	Vector<Ref<Material>> all_materials = p_solid_level_materials;
 	all_materials.append_array(p_level_trans_materials);
 
-	for (size_t current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
+	for (int64_t current_tex_page = 0; current_tex_page < last_material_id + 1; current_tex_page++) {
 
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 
@@ -2626,7 +2638,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 			continue;
 		}
 
-		for (size_t i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
+		for (int64_t i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
 			VertexAndUV vertex_and_uv = vertex_uv_map.get(current_tex_page).get(i);
 			TRRoomVertex room_vertex = room_verts[vertex_and_uv.vertex_idx];
 
@@ -2652,7 +2664,7 @@ Ref<ArrayMesh> tr_room_data_to_godot_mesh(const TRRoomData &p_room_data, const V
 		}
 		st->generate_normals();
 		ar_mesh = st->commit(ar_mesh);
-		ar_mesh->lightmap_unwrap();
+		//ar_mesh->lightmap_unwrap();
 	}
 
 	return ar_mesh;
@@ -2806,7 +2818,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 			st->add_vertex(vec3);
 		}
 
-		for (int i = 0; i < color_index_map.size(); i++) {
+		for (int32_t i = 0; i < color_index_map.size(); i++) {
 			st->add_index(color_index_map.get(i));
 		}
 
@@ -2824,7 +2836,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 			continue;
 		}
 
-		for (int i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
+		for (int32_t i = 0; i < vertex_uv_map.get(current_tex_page).size(); i++) {
 			VertexAndUV vertex_and_uv = vertex_uv_map.get(current_tex_page).get(i);
 			TRVertex vertex = mesh_verts[vertex_and_uv.vertex_idx];
 
@@ -2839,7 +2851,7 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 			st->add_vertex(vec3);
 		}
 
-		for (int i = 0; i < material_index_map.get(current_tex_page).size(); i++) {
+		for (int32_t i = 0; i < material_index_map.get(current_tex_page).size(); i++) {
 			st->add_index(material_index_map.get(current_tex_page).get(i));
 		}
 
@@ -2855,43 +2867,49 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 struct GeometryCalculation {
 	bool portal_floor;
 	bool portal_ceiling;
+	bool portal_wall;
 	bool solid;
 
-	float floor_north_west;
-	float floor_north_east;
-	float floor_south_west;
-	float floor_south_east;
+	real_t floor_north_west;
+	real_t floor_north_east;
+	real_t floor_south_west;
+	real_t floor_south_east;
 
-	float ceiling_north_west;
-	float ceiling_north_east;
-	float ceiling_south_west;
-	float ceiling_south_east;
+	real_t ceiling_north_west;
+	real_t ceiling_north_east;
+	real_t ceiling_south_west;
+	real_t ceiling_south_east;
 };
 
-CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArray p_floor_data) {
+CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, PackedByteArray p_floor_data, Vector<TRRoom> p_rooms) {
 	Ref<ConcavePolygonShape3D> collision_data = memnew(ConcavePolygonShape3D);
 
-	const float SQUARE_SIZE = 1024 * TR_TO_GODOT_SCALE;
-	const float CLICK_SIZE = SQUARE_SIZE / 4.0;
+	const real_t SQUARE_SIZE = 1024.0 * TR_TO_GODOT_SCALE;
+	const real_t CLICK_SIZE = SQUARE_SIZE / 4.0;
 
 	PackedVector3Array buf;
 
-	int y_bottom = p_room.info.y_bottom;
-	int y_top = p_room.info.y_top;
+	int32_t y_bottom = p_current_room.info.y_bottom;
+	int32_t y_top = p_current_room.info.y_top;
 
 	Vector<GeometryCalculation> calculated;
-	calculated.resize(p_room.sector_count_z * p_room.sector_count_x);
+	calculated.resize(p_current_room.sector_count_z * p_current_room.sector_count_x);
 
-	int current_sector = 0;
+	int32_t current_sector = 0;
 
 	// Floors and ceilings
-	for (int z = 0; z < p_room.sector_count_z; z++) {
-		for (int x = 0; x < p_room.sector_count_x; x++) {
+	for (int32_t x_sector = 0; x_sector < p_current_room.sector_count_z; x_sector++) {
+		for (int32_t y_sector = 0; y_sector < p_current_room.sector_count_x; y_sector++) {
 			GeometryCalculation calc = calculated.get(current_sector);
 			calc.solid = true;
+			calc.portal_floor = false;
+			calc.portal_ceiling = false;
+			calc.portal_wall = false;
 
-			uint8_t room_below = p_room.sectors[current_sector].room_below;
-			uint8_t room_above = p_room.sectors[current_sector].room_above;
+			TRRoomSector room_sector = p_current_room.sectors.get(current_sector);
+
+			uint8_t room_below = room_sector.room_below;
+			uint8_t room_above = room_sector.room_above;
 
 			if (room_below != 0xff) {
 				calc.portal_floor = true;
@@ -2901,11 +2919,67 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArr
 				calc.portal_ceiling = true;
 			}
 
-			int8_t floor_height = p_room.sectors[current_sector].floor;
-			int8_t ceiling_height = p_room.sectors[current_sector].ceiling;
-			uint16_t floor_data_index = p_room.sectors[current_sector].floor_data_index;
+			int8_t floor_height = room_sector.floor;
+			int8_t ceiling_height = room_sector.ceiling;
+			uint16_t floor_data_index = room_sector.floor_data_index;
 
 			GeometryShift geo_shift = parse_floor_data_entry(p_floor_data, floor_data_index);
+			if (geo_shift.portal_room != 0xff) {
+				calc.portal_wall = true;
+				if (geo_shift.portal_room < p_rooms.size()) {
+					// Fetch the sector data from the adjoining room.
+					TRRoom new_room = p_rooms.get(geo_shift.portal_room);
+					TRRoomSector original_room_sector = room_sector;
+
+					uint32_t current_room_x = (p_current_room.info.x >> 10);
+					uint32_t current_room_z = (p_current_room.info.z >> 10);
+
+					// SWAP
+					uint32_t global_x_sector = (current_room_x + x_sector);
+					uint32_t global_y_sector = (current_room_z + y_sector);
+
+					uint32_t new_room_x = (new_room.info.x >> 10);
+					uint32_t new_room_z = (new_room.info.z >> 10);
+
+					// SWAP
+					uint32_t new_room_local_x = (global_x_sector - new_room_x);
+					uint32_t new_room_local_y = (global_y_sector - new_room_z);
+
+					int32_t new_sector_id = (new_room_local_x * new_room.sector_count_x) + new_room_local_y;
+					room_sector = new_room.sectors.get(new_sector_id);
+
+					room_below = room_sector.room_below;
+					room_above = room_sector.room_above;
+
+					if (room_below != 0xff) {
+						calc.portal_floor = true;
+					}
+
+					if (room_above != 0xff) {
+						calc.portal_ceiling = true;
+					}
+
+					if (room_sector.floor < original_room_sector.ceiling) {
+						floor_height = original_room_sector.ceiling;
+					} else {
+						floor_height = room_sector.floor;
+					}
+
+					if (room_sector.ceiling > original_room_sector.floor) {
+						ceiling_height = original_room_sector.floor;
+					}
+					else {
+						ceiling_height = room_sector.ceiling;
+					}
+
+					ceiling_height = room_sector.ceiling;
+
+					floor_data_index = room_sector.floor_data_index;
+
+					geo_shift = parse_floor_data_entry(p_floor_data, floor_data_index);
+				}
+			}
+
 
 			int16_t n_floor_offset = (geo_shift.z_floor_shift > 0 ? -geo_shift.z_floor_shift : 0);
 			int16_t e_floor_offset = (geo_shift.x_floor_shift < 0 ? geo_shift.x_floor_shift : 0);
@@ -2927,29 +3001,75 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArr
 			int16_t sw_ceiling_height = -ceiling_height + s_ceiling_offset + w_ceiling_offset;
 			int16_t nw_ceiling_height = -ceiling_height + n_ceiling_offset + w_ceiling_offset;
 
+			if (0) {
+				calc.solid = false;
+
+				if (!calc.portal_floor) {
+					real_t ne_offset_f = (real_t)(ne_floor_height) * CLICK_SIZE;
+					real_t se_offset_f = (real_t)(se_floor_height) * CLICK_SIZE;
+					real_t sw_offset_f = (real_t)(sw_floor_height) * CLICK_SIZE;
+					real_t nw_offset_f = (real_t)(nw_floor_height) * CLICK_SIZE;
+
+					calc.floor_north_east = ne_offset_f;
+					calc.floor_south_east = se_offset_f;
+					calc.floor_north_west = nw_offset_f;
+					calc.floor_south_west = sw_offset_f;
+				}
+
+				if (!calc.portal_ceiling) {
+					real_t ne_offset_f = (real_t)(ne_ceiling_height) * CLICK_SIZE;
+					real_t se_offset_f = (real_t)(se_ceiling_height) * CLICK_SIZE;
+					real_t sw_offset_f = (real_t)(sw_ceiling_height) * CLICK_SIZE;
+					real_t nw_offset_f = (real_t)(nw_ceiling_height) * CLICK_SIZE;
+
+					calc.ceiling_north_east = ne_offset_f;
+					calc.ceiling_south_east = se_offset_f;
+					calc.ceiling_north_west = nw_offset_f;
+					calc.ceiling_south_west = sw_offset_f;
+				}
+			} else {
+				if (calc.portal_floor) {
+					calc.floor_north_east = (real_t)(-floor_height) * CLICK_SIZE;
+					calc.floor_north_west = (real_t)(-floor_height) * CLICK_SIZE;
+					calc.floor_south_east = (real_t)(-floor_height) * CLICK_SIZE;
+					calc.floor_south_west = (real_t)(-floor_height) * CLICK_SIZE;
+					calc.solid = false;
+				}
+
+				if (calc.portal_ceiling) {
+					calc.ceiling_north_east = (real_t)(-ceiling_height) * CLICK_SIZE;
+					calc.ceiling_north_west = (real_t)(-ceiling_height) * CLICK_SIZE;
+					calc.ceiling_south_east = (real_t)(-ceiling_height) * CLICK_SIZE;
+					calc.ceiling_south_west = (real_t)(-ceiling_height) * CLICK_SIZE;
+					calc.solid = false;
+				}
+			}
+
 			// floor
 			if ((ne_ceiling_height != ne_floor_height
 				|| se_ceiling_height != se_floor_height
 				|| sw_ceiling_height != sw_floor_height
-				|| nw_ceiling_height != nw_floor_height) && floor_height != -127 && room_below == 0xff && !geo_shift.is_portal) {
+				|| nw_ceiling_height != nw_floor_height) && floor_height != -127 && room_below == 0xff) {
 
-				float ne_offset_f = (float)(ne_floor_height) * CLICK_SIZE;
-				float se_offset_f = (float)(se_floor_height) * CLICK_SIZE;
-				float sw_offset_f = (float)(sw_floor_height) * CLICK_SIZE;
-				float nw_offset_f = (float)(nw_floor_height) * CLICK_SIZE;
+				real_t ne_offset_f = (real_t)(ne_floor_height) * CLICK_SIZE;
+				real_t se_offset_f = (real_t)(se_floor_height) * CLICK_SIZE;
+				real_t sw_offset_f = (real_t)(sw_floor_height) * CLICK_SIZE;
+				real_t nw_offset_f = (real_t)(nw_floor_height) * CLICK_SIZE;
 
-				calc.floor_south_west = ne_offset_f;
+				calc.floor_north_east = ne_offset_f;
 				calc.floor_south_east = se_offset_f;
 				calc.floor_north_west = nw_offset_f;
 				calc.floor_south_west = sw_offset_f;
 
-				buf.append(Vector3(SQUARE_SIZE * z,					nw_offset_f, -(SQUARE_SIZE * x)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	ne_offset_f, -(SQUARE_SIZE * x)));
-				buf.append(Vector3(SQUARE_SIZE * z,					sw_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
+				if (!calc.portal_wall) {
+					buf.append(Vector3(SQUARE_SIZE * x_sector, nw_offset_f, -(SQUARE_SIZE * y_sector)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, ne_offset_f, -(SQUARE_SIZE * y_sector)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector, sw_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
 
-				buf.append(Vector3(SQUARE_SIZE * z,					sw_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	se_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	ne_offset_f, -(SQUARE_SIZE * x)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector, sw_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, se_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, ne_offset_f, -(SQUARE_SIZE * y_sector)));
+				}
 
 				calc.solid = false;
 			}
@@ -2958,25 +3078,27 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArr
 			if ((ne_ceiling_height != ne_floor_height
 				|| se_ceiling_height != se_floor_height
 				|| sw_ceiling_height != sw_floor_height
-				|| nw_ceiling_height != nw_floor_height) && ceiling_height != -127 && room_above == 0xff && !geo_shift.is_portal) {
+				|| nw_ceiling_height != nw_floor_height) && ceiling_height != -127 && room_above == 0xff) {
 
-				float ne_offset_f = (float)(ne_ceiling_height) * CLICK_SIZE;
-				float se_offset_f = (float)(se_ceiling_height) * CLICK_SIZE;
-				float sw_offset_f = (float)(sw_ceiling_height) * CLICK_SIZE;
-				float nw_offset_f = (float)(nw_ceiling_height) * CLICK_SIZE;
+				real_t ne_offset_f = (real_t)(ne_ceiling_height) * CLICK_SIZE;
+				real_t se_offset_f = (real_t)(se_ceiling_height) * CLICK_SIZE;
+				real_t sw_offset_f = (real_t)(sw_ceiling_height) * CLICK_SIZE;
+				real_t nw_offset_f = (real_t)(nw_ceiling_height) * CLICK_SIZE;
 
-				calc.ceiling_south_west = ne_offset_f;
+				calc.ceiling_north_east = ne_offset_f;
 				calc.ceiling_south_east = se_offset_f;
 				calc.ceiling_north_west = nw_offset_f;
 				calc.ceiling_south_west = sw_offset_f;
 
-				buf.append(Vector3(SQUARE_SIZE * z,					nw_offset_f, -(SQUARE_SIZE * x)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	ne_offset_f, -(SQUARE_SIZE * x)));
-				buf.append(Vector3(SQUARE_SIZE * z,					sw_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
+				if (!calc.portal_wall) {
+					buf.append(Vector3(SQUARE_SIZE * x_sector, nw_offset_f, -(SQUARE_SIZE * y_sector)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, ne_offset_f, -(SQUARE_SIZE * y_sector)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector, sw_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
 
-				buf.append(Vector3(SQUARE_SIZE * z,					sw_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	se_offset_f, -(SQUARE_SIZE * x + SQUARE_SIZE)));
-				buf.append(Vector3(SQUARE_SIZE * z + SQUARE_SIZE,	ne_offset_f, -(SQUARE_SIZE * x)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector, sw_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, se_offset_f, -(SQUARE_SIZE * y_sector + SQUARE_SIZE)));
+					buf.append(Vector3(SQUARE_SIZE * x_sector + SQUARE_SIZE, ne_offset_f, -(SQUARE_SIZE * y_sector)));
+				}
 
 				calc.solid = false;
 			}
@@ -2989,24 +3111,219 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_room, PackedByteArr
 	current_sector = 0;
 
 	// Walls
-	for (int z = 0; z < p_room.sector_count_z; z++) {
-		for (int x = 0; x < p_room.sector_count_x; x++) {
+	for (int32_t x_sector = 0; x_sector < p_current_room.sector_count_z; x_sector++) {
+		for (int32_t y_sector = 0; y_sector < p_current_room.sector_count_x; y_sector++) {
 			GeometryCalculation calc = calculated.get(current_sector);
 
-			if (z >= 1 && z <= p_room.sector_count_z - 2 && x >= 1 && x <= p_room.sector_count_x - 2) {
-				if (!calc.solid) {
-					int north_sector_id = current_sector + (p_room.sector_count_z);
-					int south_sector_id = current_sector - (p_room.sector_count_z);
-					int east_sector_id = current_sector + 1;
-					int west_sector_id = current_sector - 1;
+			if (x_sector >= 1 && x_sector < p_current_room.sector_count_z - 1 && y_sector >= 1 && y_sector < p_current_room.sector_count_x) {
+				if (!calc.solid && !calc.portal_wall) {
+					int32_t north_sector_id = current_sector - 1;
+					int32_t south_sector_id = current_sector + 1;
+					int32_t east_sector_id = current_sector + (p_current_room.sector_count_x);
+					int32_t west_sector_id = current_sector - (p_current_room.sector_count_x);
 
-					//GeometryCalculation north_calc = calculated.get(north_sector_id);
-					//GeometryCalculation south_calc = calculated.get(south_sector_id);
-					//GeometryCalculation east_calc = calculated.get(east_sector_id);
-					//GeometryCalculation west_calc = calculated.get(west_sector_id);
+					GeometryCalculation north_calc = calculated.get(north_sector_id);
+					GeometryCalculation south_calc = calculated.get(south_sector_id);
+					GeometryCalculation east_calc = calculated.get(east_sector_id);
+					GeometryCalculation west_calc = calculated.get(west_sector_id);
+
+					// North
+					{
+						Vector3 current_bottom_left =	Vector3((SQUARE_SIZE * x_sector),				calc.floor_north_west,		-(SQUARE_SIZE * y_sector));
+						Vector3 current_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	calc.floor_north_east,		-(SQUARE_SIZE * y_sector));
+						Vector3 current_top_left =		Vector3((SQUARE_SIZE * x_sector),				calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector));
+						Vector3 current_top_right =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector));
+
+						if (north_calc.solid) {
+							buf.append(current_bottom_left);
+							buf.append(current_bottom_right);
+							buf.append(current_top_left);
+
+							buf.append(current_bottom_right);
+							buf.append(current_top_right);
+							buf.append(current_top_left);
+						} else {
+							Vector3 next_bottom_left =	Vector3((SQUARE_SIZE * x_sector),				north_calc.floor_south_west,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	north_calc.floor_south_east,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector),				north_calc.ceiling_south_west,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	north_calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector));
+
+							// Bottom quad difference
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+									buf.append(current_bottom_left);
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_left);
+
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_right);
+									buf.append(next_bottom_left);
+								}
+							}
+
+							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
+								// Top quad difference
+								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+									buf.append(current_top_left);
+									buf.append(current_top_right);
+									buf.append(next_top_left);
+
+									buf.append(current_top_right);
+									buf.append(next_top_right);
+									buf.append(next_top_left);
+								}
+							}
+						}
+					}
+
+					// South
+					{
+						Vector3 current_bottom_left =	Vector3((SQUARE_SIZE * x_sector),				calc.floor_south_west,		-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						Vector3 current_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	calc.floor_south_east,		-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						Vector3 current_top_left =		Vector3((SQUARE_SIZE * x_sector),				calc.ceiling_south_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						Vector3 current_top_right =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+
+						if (south_calc.solid) {
+							buf.append(current_bottom_left);
+							buf.append(current_bottom_right);
+							buf.append(current_top_left);
+
+							buf.append(current_bottom_right);
+							buf.append(current_top_right);
+							buf.append(current_top_left);
+						} else {
+							Vector3 next_bottom_left =	Vector3((SQUARE_SIZE * x_sector),				south_calc.floor_north_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							Vector3 next_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	south_calc.floor_north_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector),				south_calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	south_calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								// Bottom quad difference
+								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+									buf.append(current_bottom_left);
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_left);
+
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_right);
+									buf.append(next_bottom_left);
+								}
+							}
+
+							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
+								// Top quad difference
+								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+									buf.append(current_top_left);
+									buf.append(current_top_right);
+									buf.append(next_top_left);
+
+									buf.append(current_top_right);
+									buf.append(next_top_right);
+									buf.append(next_top_left);
+								}
+							}
+						}
+					}
+
+					// East
+					{
+						Vector3 current_bottom_left =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, calc.floor_north_east,		-(SQUARE_SIZE * y_sector));
+						Vector3 current_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, calc.floor_south_east,		-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						Vector3 current_top_left =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector));
+						Vector3 current_top_right =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+
+						if (east_calc.solid) {
+							buf.append(current_bottom_left);
+							buf.append(current_bottom_right);
+							buf.append(current_top_left);
+
+							buf.append(current_bottom_right);
+							buf.append(current_top_right);
+							buf.append(current_top_left);
+						} else {
+							Vector3 next_bottom_left =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.floor_north_west,		-(SQUARE_SIZE * y_sector));
+							Vector3 next_bottom_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.floor_south_west,		-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.ceiling_south_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								// Bottom quad difference
+								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+									buf.append(current_bottom_left);
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_left);
+
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_right);
+									buf.append(next_bottom_left);
+								}
+							}
+
+							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
+								// Top quad difference
+								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+									buf.append(current_top_left);
+									buf.append(current_top_right);
+									buf.append(next_top_left);
+
+									buf.append(current_top_right);
+									buf.append(next_top_right);
+									buf.append(next_top_left);
+								}
+							}
+						}
+					}
+
+					// West
+					{
+						Vector3 current_bottom_left =	Vector3((SQUARE_SIZE * x_sector), calc.floor_north_west,	-(SQUARE_SIZE * y_sector));
+						Vector3 current_bottom_right =	Vector3((SQUARE_SIZE * x_sector), calc.floor_south_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+						Vector3 current_top_left =		Vector3((SQUARE_SIZE * x_sector), calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector));
+						Vector3 current_top_right =		Vector3((SQUARE_SIZE * x_sector), calc.ceiling_south_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+
+						if (west_calc.solid) {
+							buf.append(current_bottom_left);
+							buf.append(current_bottom_right);
+							buf.append(current_top_left);
+
+							buf.append(current_bottom_right);
+							buf.append(current_top_right);
+							buf.append(current_top_left);
+						} else {
+							Vector3 next_bottom_left =	Vector3((SQUARE_SIZE * x_sector), west_calc.floor_north_east,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_bottom_right =	Vector3((SQUARE_SIZE * x_sector), west_calc.floor_south_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector), west_calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector));
+							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector), west_calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
+							
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								// Bottom quad difference
+								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+									buf.append(current_bottom_left);
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_left);
+
+									buf.append(current_bottom_right);
+									buf.append(next_bottom_right);
+									buf.append(next_bottom_left);
+								}
+							}
+
+							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
+								// Top quad difference
+								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+									buf.append(current_top_left);
+									buf.append(current_top_right);
+									buf.append(next_top_left);
+
+									buf.append(current_top_right);
+									buf.append(next_top_right);
+									buf.append(next_top_left);
+								}
+							}
+						}
+					}
 				}
 			}
-			calculated.set(current_sector, calc);
 			current_sector++;
 		}
 	}
@@ -3052,7 +3369,7 @@ Ref<Material> generate_tr_shader_material(Ref<ImageTexture> p_image_texture, Ref
 
 void set_owner_recursively(Node *p_node, Node *p_owner) {
 	p_node->set_owner(p_owner);
-	for (int i = 0; i < p_node->get_child_count(); i++) {
+	for (int32_t i = 0; i < p_node->get_child_count(); i++) {
 		set_owner_recursively(p_node->get_child(i), p_owner);
 	}
 }
@@ -3075,7 +3392,7 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
-			const float VERTEX_COLOR_MULTIPLIER = 2.0;\n\
+			const float VERTEX_COLOR_MULTIPLIER = 4.0;\n\
 			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
 			ALBEDO = albedo_tex.rgb;\n\
@@ -3093,7 +3410,7 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
-			const float VERTEX_COLOR_MULTIPLIER = 2.0;\n\
+			const float VERTEX_COLOR_MULTIPLIER = 4.0;\n\
 			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
 			ALBEDO = albedo_tex.rgb;\n\
@@ -3110,8 +3427,8 @@ Node3D *generate_godot_scene(
 	// Palette Texture
 	if (!level_data.palette.is_empty()) {
 		Ref<Image> palette_image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+		for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+			for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 				uint32_t index = ((y / 16) * 16) + (x / 16);
 
 				TRColor3 color = level_data.palette.get(index);
@@ -3127,12 +3444,12 @@ Node3D *generate_godot_scene(
 
 	Vector<Ref<ImageTexture>> image_textures;
 
-	for (int i = 0; i < level_data.level_textures.size(); i++) {
+	for (int32_t i = 0; i < level_data.level_textures.size(); i++) {
 		PackedByteArray current_texture = level_data.level_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
 		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
-			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 					if (index == 0x00) {
@@ -3146,8 +3463,8 @@ Node3D *generate_godot_scene(
 				}
 			}
 		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
-			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
 					uint8_t b = current_texture.get(index + 0);
 					uint8_t g = current_texture.get(index + 1);
@@ -3167,12 +3484,12 @@ Node3D *generate_godot_scene(
 		image_textures.push_back(ImageTexture::create_from_image(image));
 	}
 
-	for (int i = 0; i < level_data.entity_textures.size(); i++) {
+	for (int32_t i = 0; i < level_data.entity_textures.size(); i++) {
 		PackedByteArray current_texture = level_data.entity_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
 		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
-			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 					if (index == 0x00) {
@@ -3186,8 +3503,8 @@ Node3D *generate_godot_scene(
 				}
 			}
 		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
-			for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-				for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
 					uint8_t b = current_texture.get(index + 0);
 					uint8_t g = current_texture.get(index + 1);
@@ -3207,7 +3524,7 @@ Node3D *generate_godot_scene(
 		image_textures.push_back(ImageTexture::create_from_image(image));
 	}
 
-	for (int i = 0; i < image_textures.size(); i++) {
+	for (int32_t i = 0; i < image_textures.size(); i++) {
 		level_materials.append(generate_tr_shader_material(image_textures[i], level_shader));
 		level_trans_materials.append(generate_tr_shader_material(image_textures[i], level_trans_shader));
 		entity_materials.append(generate_tr_generic_material(image_textures[i], false));
@@ -3227,8 +3544,8 @@ Node3D *generate_godot_scene(
 	if (!level_data.sound_buffer.is_empty()) {
 		for (TRSoundInfo tr_sound_info : level_data.sound_infos) {
 			int32_t sample_id = tr_sound_info.sample_index;
-			int loop_mode = tr_sound_info.characteristics & 0x2;;
-			int sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
+			int32_t loop_mode = tr_sound_info.characteristics & 0x2;;
+			int32_t sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
 
 			Ref<AudioStreamRandomizer> sample_collection = memnew(AudioStreamRandomizer);
 
@@ -3249,7 +3566,7 @@ Node3D *generate_godot_scene(
 
 			sample_collection->set_playback_mode(AudioStreamRandomizer::PLAYBACK_RANDOM);
 
-			for (int i = 0; i < sample_count; i++) {
+			for (int32_t i = 0; i < sample_count; i++) {
 				uint32_t sample_offset = level_data.sound_indices.get(sample_id + i);
 				Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(level_data.sound_buffer);
 
@@ -3279,7 +3596,7 @@ Node3D *generate_godot_scene(
 									uint32_t buffer_size = buffer_access->get_u32();
 									PackedByteArray pba = buffer_access->get_buffer(buffer_size);
 									if (bits_per_sample <= 8) {
-										for (int buf_idx = 0; buf_idx < pba.size(); buf_idx++) {
+										for (int32_t buf_idx = 0; buf_idx < pba.size(); buf_idx++) {
 											pba.ptrw()[buf_idx] = pba.ptr()[buf_idx] - 128;
 										}
 									}
@@ -3290,8 +3607,6 @@ Node3D *generate_godot_scene(
 									sample->set_data(pba);
 									sample->set_loop_begin(0);
 									sample->set_loop_end(buffer_size);
-
-									sample->save_to_wav("res://test.wav");
 
 									sample_collection->add_stream(i, sample);
 								}
@@ -3397,7 +3712,7 @@ Node3D *generate_godot_scene(
 					static_body->set_owner(scene_owner);
 					static_body->set_position(Vector3());
 
-					CollisionShape3D* collision_shape = tr_room_to_collision_shape(room, level_data.floor_data);
+					CollisionShape3D* collision_shape = tr_room_to_collision_shape(room, level_data.floor_data, level_data.rooms);
 
 					static_body->add_child(collision_shape);
 					collision_shape->set_owner(scene_owner);
@@ -3406,7 +3721,7 @@ Node3D *generate_godot_scene(
 
 				uint32_t static_mesh_idx = 0;
 				for (const TRRoomStaticMesh& room_static_mesh : room.room_static_meshes) {
-					int mesh_static_number = room_static_mesh.mesh_id;
+					int32_t mesh_static_number = room_static_mesh.mesh_id;
 
 					if (level_data.types.static_info_map.has(mesh_static_number)) {
 						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
@@ -3415,7 +3730,7 @@ Node3D *generate_godot_scene(
 					if (level_data.types.static_info_map.has(mesh_static_number)) {
 						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
 						if (static_info.flags & 2) {
-							int mesh_number = static_info.mesh_number;
+							int32_t mesh_number = static_info.mesh_number;
 							if (mesh_number < meshes.size() && mesh_number >= 0) {
 								Ref<ArrayMesh> mesh = meshes.get(mesh_number);
 								MeshInstance3D* mi = memnew(MeshInstance3D);
@@ -3477,11 +3792,11 @@ void TRLevel::load_level(bool p_lara_only) {
 
 void dump_8bit_textures(Vector<PackedByteArray> p_textures, Vector<TRColor3> p_palette) {
 	// Image Textures
-	for (int i = 0; i < p_textures.size(); i++) {
+	for (int32_t i = 0; i < p_textures.size(); i++) {
 		PackedByteArray current_texture = p_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+		for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+			for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 				uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 				if (index == 0x00) {
@@ -3502,11 +3817,11 @@ void dump_8bit_textures(Vector<PackedByteArray> p_textures, Vector<TRColor3> p_p
 
 void dump_32bit_textures(Vector<PackedByteArray> p_textures) {
 	// Image Textures
-	for (int i = 0; i < p_textures.size(); i++) {
+	for (int32_t i = 0; i < p_textures.size(); i++) {
 		PackedByteArray current_texture = p_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		for (int x = 0; x < TR_TEXTILE_SIZE; x++) {
-			for (int y = 0; y < TR_TEXTILE_SIZE; y++) {
+		for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+			for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 
 				uint8_t b = current_texture.get(((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t));
 				uint8_t g = current_texture.get(((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t) + 1);
@@ -3710,7 +4025,7 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 
 		Vector<int32_t> wave_table;
 		// TODO: handle Remaster
-		for (int i = 0; i < 370; i++) {
+		for (int32_t i = 0; i < 370; i++) {
 			if (sfx_file->get_fixed_string(4) == "RIFF") {
 				wave_table.append(sfx_file->get_position() - 4);
 				uint32_t file_size = sfx_file->get_u32();
@@ -3734,7 +4049,7 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 				}
 			}
 		}
-		for (int i = 0; i < sound_indices.size(); i++) {
+		for (int32_t i = 0; i < sound_indices.size(); i++) {
 			int32_t index = sound_indices.get(i);
 			if (index < wave_table.size()) {
 				sound_indices.set(i, wave_table.get(index));
@@ -3770,7 +4085,7 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 	return level_data;
 }
 
-void TRLevel::_notification(int p_what) {
+void TRLevel::_notification(int32_t p_what) {
 	switch (p_what) {
 		case NOTIFICATION_READY:
 			break;

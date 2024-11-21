@@ -27,7 +27,7 @@ enum TRLevelFormat {
 #include "tr_misc.hpp"
 #include "tr_types.h"
 
-const float TR_FPS = 30.0f;
+const real_t TR_FPS = 30.0f;
 
 class TRLevel : public Node3D {
 	GDCLASS(TRLevel, Node3D);
@@ -39,7 +39,7 @@ public:
 	TRLevel();
 	~TRLevel();
 
-	void _notification(int p_what);
+	void _notification(int32_t p_what);
 
 	String get_level_path() { return level_path; }
 	void set_level_path(String p_level_path) { level_path = p_level_path; }
