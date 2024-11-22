@@ -2959,14 +2959,16 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, Packe
 						calc.portal_ceiling = true;
 					}
 
-					if (room_sector.floor < original_room_sector.ceiling) {
-						floor_height = original_room_sector.ceiling;
+					int8_t floor_max = p_current_room.info.y_top >> 8;
+					if (room_sector.floor < floor_max) {
+						floor_height = floor_max;
 					} else {
 						floor_height = room_sector.floor;
 					}
 
-					if (room_sector.ceiling > original_room_sector.floor) {
-						ceiling_height = original_room_sector.floor;
+					int8_t ceiling_max = p_current_room.info.y_bottom >> 8;
+					if (room_sector.ceiling > ceiling_max) {
+						ceiling_height = ceiling_max;
 					}
 					else {
 						ceiling_height = room_sector.ceiling;
@@ -3149,25 +3151,29 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, Packe
 							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	north_calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector));
 
 							// Bottom quad difference
-							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
-								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 || (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								if ((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON) {
 									buf.append(current_bottom_left);
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_left);
+								}
 
+								if ((current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON) {
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_right);
 									buf.append(next_bottom_left);
 								}
 							}
 
-							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
-								// Top quad difference
-								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+							// Top quad difference
+							if (((current_top_left.y - next_top_left.y) > 0.0 || (current_top_right.y - next_top_right.y) > 0.0)) {
+								if ((current_top_left.y - next_top_left.y) > CMP_EPSILON) {
 									buf.append(current_top_left);
 									buf.append(current_top_right);
 									buf.append(next_top_left);
+								}
 
+								if (((current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
 									buf.append(current_top_right);
 									buf.append(next_top_right);
 									buf.append(next_top_left);
@@ -3197,26 +3203,30 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, Packe
 							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector),				south_calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
 							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE,	south_calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
 						
-							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
-								// Bottom quad difference
-								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+							// Bottom quad difference
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 || (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								if ((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON) {
 									buf.append(current_bottom_left);
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_left);
+								}
 
+								if ((current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON) {
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_right);
 									buf.append(next_bottom_left);
 								}
 							}
 
-							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
-								// Top quad difference
-								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+							// Top quad difference
+							if (((current_top_left.y - next_top_left.y) > 0.0 || (current_top_right.y - next_top_right.y) > 0.0)) {
+								if ((current_top_left.y - next_top_left.y) > CMP_EPSILON) {
 									buf.append(current_top_left);
 									buf.append(current_top_right);
 									buf.append(next_top_left);
+								}
 
+								if (((current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
 									buf.append(current_top_right);
 									buf.append(next_top_right);
 									buf.append(next_top_left);
@@ -3246,26 +3256,30 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, Packe
 							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.ceiling_north_west,	-(SQUARE_SIZE * y_sector));
 							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector) + SQUARE_SIZE, east_calc.ceiling_south_west,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
 
-							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
-								// Bottom quad difference
-								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+							// Bottom quad difference
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 || (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								if ((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON) {
 									buf.append(current_bottom_left);
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_left);
+								}
 
+								if ((current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON) {
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_right);
 									buf.append(next_bottom_left);
 								}
 							}
 
-							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
-								// Top quad difference
-								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+							// Top quad difference
+							if (((current_top_left.y - next_top_left.y) > 0.0 || (current_top_right.y - next_top_right.y) > 0.0)) {
+								if ((current_top_left.y - next_top_left.y) > CMP_EPSILON) {
 									buf.append(current_top_left);
 									buf.append(current_top_right);
 									buf.append(next_top_left);
+								}
 
+								if (((current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
 									buf.append(current_top_right);
 									buf.append(next_top_right);
 									buf.append(next_top_left);
@@ -3295,26 +3309,30 @@ CollisionShape3D *tr_room_to_collision_shape(const TRRoom& p_current_room, Packe
 							Vector3 next_top_left =		Vector3((SQUARE_SIZE * x_sector), west_calc.ceiling_north_east,	-(SQUARE_SIZE * y_sector));
 							Vector3 next_top_right =	Vector3((SQUARE_SIZE * x_sector), west_calc.ceiling_south_east,	-(SQUARE_SIZE * y_sector) - SQUARE_SIZE);
 							
-							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 && (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
-								// Bottom quad difference
-								if (((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON && (current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON)) {
+							// Bottom quad difference
+							if (((current_bottom_left.y - next_bottom_left.y) < 0.0 || (current_bottom_right.y - next_bottom_right.y) < 0.0)) {
+								if ((current_bottom_left.y - next_bottom_left.y) < CMP_EPSILON) {
 									buf.append(current_bottom_left);
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_left);
+								}
 
+								if ((current_bottom_right.y - next_bottom_right.y) < CMP_EPSILON) {
 									buf.append(current_bottom_right);
 									buf.append(next_bottom_right);
 									buf.append(next_bottom_left);
 								}
 							}
 
-							if (((current_top_left.y - next_top_left.y) > 0.0 && (current_top_right.y - next_top_right.y) > 0.0)) {
-								// Top quad difference
-								if (((current_top_left.y - next_top_left.y) > CMP_EPSILON && (current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
+							// Top quad difference
+							if (((current_top_left.y - next_top_left.y) > 0.0 || (current_top_right.y - next_top_right.y) > 0.0)) {
+								if ((current_top_left.y - next_top_left.y) > CMP_EPSILON) {
 									buf.append(current_top_left);
 									buf.append(current_top_right);
 									buf.append(next_top_left);
+								}
 
+								if (((current_top_right.y - next_top_right.y) > CMP_EPSILON)) {
 									buf.append(current_top_right);
 									buf.append(next_top_right);
 									buf.append(next_top_left);
