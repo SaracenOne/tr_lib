@@ -149,15 +149,12 @@ TRRoomVertex read_tr_room_vertex(Ref<TRFileAccess> p_file, TRLevelFormat p_forma
 	}
 
 	if (p_format == TR3_PC || p_format == TR4_PC) {
-		room_vertex.color = tr_color_shade_to_godot_color(second_shade_value);
-		if (p_format == TR3_PC) {
-			room_vertex.color /= 2.0;
-		}
+		room_vertex.color = tr_color_shade_to_godot_color(second_shade_value) * 8.0;
 		room_vertex.color2 = room_vertex.color;
 	} else {
-		room_vertex.color = tr_monochrome_shade_to_godot_color(first_shade_value) / 2.0;
+		room_vertex.color = tr_monochrome_shade_to_godot_color(first_shade_value);
 		if (p_format == TR2_PC) {
-			room_vertex.color2 = tr_monochrome_shade_to_godot_color(second_shade_value) / 2.0;
+			room_vertex.color2 = tr_monochrome_shade_to_godot_color(second_shade_value);
 		} else {
 			room_vertex.color2 = room_vertex.color;
 		}
@@ -967,6 +964,7 @@ Node3D *create_godot_moveable_model(
 					int16_t target_animation_state = state_change.target_animation_state;
 					int16_t dispatch_index = state_change.dispatch_index;
 					state_change_dict.set("target_animation_state", target_animation_state);
+					state_change_dict.set("target_animation_state_name", get_state_name(p_type_info_id, target_animation_state, p_level_format));
 
 					Array dispatches;
 					for (int64_t dispatch_offset_idx = 0; dispatch_offset_idx < state_change.number_dispatches; dispatch_offset_idx++) {
@@ -1163,6 +1161,8 @@ Node3D *create_godot_moveable_model(
 
 				godot_animation->set_meta("tr_animation_state_changes", animation_state_changes);
 				godot_animation->set_meta("tr_animation_current_animation_state", tr_animation.current_animation_state);
+				godot_animation->set_meta("tr_animation_current_animation_state_name", get_state_name(p_type_info_id, tr_animation.current_animation_state, p_level_format));
+
 				godot_animation->set_meta("tr_animation_frame_skip", tr_animation.frame_skip);
 				
 				godot_animation->set_meta("tr_animation_next_animation_id", tr_animation.next_animation_number - p_moveable_info.animation_index);
@@ -1203,6 +1203,7 @@ Node3D *create_godot_moveable_model(
 
 			String root_motion_path_string = String(skeleton_path) + ":Root";
 			animation_player->set_root_motion_track(root_motion_path_string);
+			animation_tree->set_root_motion_track(root_motion_path_string);
 
 			real_t motion_scale = 1.0;
 
@@ -3410,11 +3411,14 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
-			const float VERTEX_COLOR_MULTIPLIER = 4.0;\n\
-			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
-			ALBEDO = albedo_tex.rgb;\n\
-			EMISSION.rgb = albedo_tex.rgb * (COLOR.rgb * VERTEX_COLOR_MULTIPLIER);\n\
+			ALBEDO = vec3(0.0, 0.0, 0.0);\n\
+			float inv_gamma =  1.0 / 2.2;\n\
+			float gamma = 2.2;\n\
+			vec3 color_gamma = pow(albedo_tex.rgb, vec3(inv_gamma, inv_gamma, inv_gamma));\n\
+			color_gamma *= COLOR.rgb;\n\
+			color_gamma *= 2.0;\n\
+			EMISSION.rgb = pow(color_gamma, vec3(gamma, gamma, gamma));\n\
 			METALLIC = 0.0;\n\
 			SPECULAR = 1.0;\n\
 			ROUGHNESS = 1.0;\n\
@@ -3428,11 +3432,14 @@ Node3D *generate_godot_scene(
 		\n\
 		void fragment() {\n\
 			vec2 base_uv = UV;\n\
-			const float VERTEX_COLOR_MULTIPLIER = 4.0;\n\
-			\n\
 			vec4 albedo_tex = texture(texture_albedo, base_uv);\n\
-			ALBEDO = albedo_tex.rgb;\n\
-			EMISSION.rgb = albedo_tex.rgb * (COLOR.rgb * VERTEX_COLOR_MULTIPLIER);\n\
+			ALBEDO = vec3(0.0, 0.0, 0.0);\n\
+			float inv_gamma =  1.0 / 2.2;\n\
+			float gamma = 2.2;\n\
+			vec3 color_gamma = pow(albedo_tex.rgb, vec3(inv_gamma, inv_gamma, inv_gamma));\n\
+			color_gamma *= COLOR.rgb;\n\
+			color_gamma *= 2.0;\n\
+			EMISSION.rgb = pow(color_gamma, vec3(gamma, gamma, gamma));\n\
 			METALLIC = 0.0;\n\
 			SPECULAR = 1.0;\n\
 			ROUGHNESS = 1.0;\n\

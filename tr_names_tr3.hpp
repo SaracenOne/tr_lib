@@ -7,25 +7,25 @@ static String get_tr3_type_info_name(uint32_t p_type_info_id) {
 	case 0:
 		return "Lara";
 	case 1:
-		return "Lara Pistol Animation";
+		return "Lara Pistols Animations";
 	case 2:
 		return "Lara's Hair";
 	case 3:
-		return "Lara Shotgun Animation";
+		return "Lara Shotgun Animations";
 	case 4:
-		return "Lara Desert Eagle Animation";
+		return "Lara Desert Eagle Animations";
 	case 5:
-		return "Lara Uzi Animation";
+		return "Lara Uzis Animations";
 	case 6:
-		return "Lara MP5 Animation";
+		return "Lara MP5 Animations";
 	case 7:
-		return "Lara Rocket Launcher Animation";
+		return "Lara Rocket Launcher Animations";
 	case 8:
-		return "Lara Grenade Launcher Animation";
+		return "Lara Grenade Launcher Animations";
 	case 9:
-		return "Lara Harpoon Gun Animation";
+		return "Lara Harpoon Gun Animations";
 	case 10:
-		return "Lara Flare Animation";
+		return "Lara Flare Animations";
 	case 22:
 		return "Dog";
 	case 24:

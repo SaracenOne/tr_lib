@@ -7,7 +7,7 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 0:
 			return "run";
 		case 1:
-			return "walk_forward";
+			return "walk_forwards";
 		case 2:
 			return "walk_stop_right";
 		case 3:
@@ -145,11 +145,11 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 69:
 			return "rotate_left";
 		case 70:
-			return "slide_forward";
+			return "slide_forwards";
 		case 71:
-			return "slide_forward_end";
+			return "slide_forwards_end";
 		case 72:
-			return "slide_forward_stop";
+			return "slide_forwards_stop";
 		case 73:
 			return "stand_to_jump";
 		case 74:
@@ -157,9 +157,9 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 75:
 			return "jump_back";
 		case 76:
-			return "jump_forward_start";
+			return "jump_forwards_start";
 		case 77:
-			return "jump_forward";
+			return "jump_forwards";
 		case 78:
 			return "jump_left_start";
 		case 79:
@@ -177,9 +177,9 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 85:
 			return "jump_right_to_freefall";
 		case 86:
-			return "underwater_swim_forward";
+			return "underwater_swim_forwards";
 		case 87:
-			return "underwater_swim_forward_drift";
+			return "underwater_swim_forwards_drift";
 		case 88:
 			return "small_jump_back_start";
 		case 89:
@@ -193,7 +193,7 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 93:
 			return "fall_back";
 		case 94:
-			return "jump_forward_to_reach";
+			return "jump_forwards_to_reach";
 		case 95:
 			return "reach";
 		case 96:
@@ -205,19 +205,19 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 99:
 			return "fall_crouching_landing_unused";
 		case 100:
-			return "jump_forward_to_reach_late_unused";
+			return "jump_forwards_to_reach_late_unused";
 		case 101:
-			return "jump_forward_start_to_reach_alternate_unused";
+			return "jump_forwards_start_to_reach_alternate_unused";
 		case 102:
 			return "climb_on_end";
 		case 103:
 			return "stand_idle";
 		case 104:
-			return "slide_backward_start";
+			return "slide_backwards_start";
 		case 105:
-			return "slide_backward";
+			return "slide_backwards";
 		case 106:
-			return "slide_backward_end";
+			return "slide_backwards_end";
 		case 107:
 			return "underwater_swim_to_idle";
 		case 108:
@@ -235,13 +235,13 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 114:
 			return "underwater_to_on_water";
 		case 115:
-			return "on_water_swim_forward_dive_unused";
+			return "on_water_swim_forwards_dive_unused";
 		case 116:
-			return "on_water_swim_forward";
+			return "on_water_swim_forwards";
 		case 117:
-			return "on_water_swim_forward_to_idle";
+			return "on_water_swim_forwards_to_idle";
 		case 118:
-			return "on_water_idle_to_swim_forward";
+			return "on_water_idle_to_swim_forwards";
 		case 119:
 			return "on_water_dive";
 		case 120:
@@ -425,9 +425,9 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 209:
 			return "run_jump_roll_end";
 		case 210:
-			return "jump_forward_roll_start";
+			return "jump_forwards_roll_start";
 		case 211:
-			return "jump_forward_roll_end";
+			return "jump_forwards_roll_end";
 		case 212:
 			return "jump_back_roll_start";
 		case 213:
@@ -457,11 +457,11 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 				return "stand_to_crouch";
 			}
 		case 218:
-			return "crouch_roll_forward_start_unused";
+			return "crouch_roll_forwards_start_unused";
 		case 219:
-			return "crouch_roll_forward_continue_unused";
+			return "crouch_roll_forwards_continue_unused";
 		case 220:
-			return "crouch_roll_forward_end_unused";
+			return "crouch_roll_forwards_end_unused";
 		case 221:
 			return "crouch_to_stand";
 		case 222:
@@ -493,13 +493,13 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 235:
 			return "monkey_fall";
 		case 236:
-			return "monkey_forward";
+			return "monkey_forwards";
 		case 237:
 			return "monkey_stop_left";
 		case 238:
 			return "monkey_stop_right";
 		case 239:
-			return "monkey_idle_to_forward_left";
+			return "monkey_idle_to_forwards_left";
 		case 240:
 			return "sprint_to_roll_alternate_start_unused";
 		case 241:
@@ -513,19 +513,19 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 245:
 			return "stand_to_crouch_end";
 		case 246:
-			return "slide_forward_to_run";
+			return "slide_forwards_to_run";
 		case 247:
-			return "crouch_roll_forward_start_alternate";
+			return "crouch_roll_forwards_start_alternate";
 		case 248:
-			return "jump_forward_start_to_grab_early";
+			return "jump_forwards_start_to_grab_early";
 		case 249:
-			return "jump_forward_start_to_grab_late";
+			return "jump_forwards_start_to_grab_late";
 		case 250:
 			return "run_to_grab_right";
 		case 251:
 			return "run_to_grab_left";
 		case 252:
-			return "monkey_idle_to_forward_right";
+			return "monkey_idle_to_forwards_right";
 		case 253:
 			return "monkey_shimmy_left";
 		case 254:
@@ -541,11 +541,11 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 259:
 			return "crawl_to_crouch_start";
 		case 260:
-			return "crawl_forward";
+			return "crawl_forwards";
 		case 261:
-			return "crawl_idle_to_forward";
+			return "crawl_idle_to_forwards";
 		case 262:
-			return "crawl_forward_to_idle_start_right";
+			return "crawl_forwards_to_idle_start_right";
 		case 263:
 			return "crawl_idle";
 		case 264:
@@ -553,11 +553,11 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 265:
 			return "crouch_to_crawl_end_unused";
 		case 266:
-			return "crawl_forward_to_idle_end_right";
+			return "crawl_forwards_to_idle_end_right";
 		case 267:
-			return "crawl_forward_to_idle_start_left";
+			return "crawl_forwards_to_idle_start_left";
 		case 268:
-			return "crawl_forward_to_idle_end_left";
+			return "crawl_forwards_to_idle_end_left";
 		case 269:
 			return "crawl_turn_left";
 		case 270:
@@ -571,17 +571,17 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 274:
 			return "crawl_to_crouch_continue";
 		case 275:
-			return "crawl_idle_to_backward";
+			return "crawl_idle_to_backwards";
 		case 276:
-			return "crawl_backward";
+			return "crawl_backwards";
 		case 277:
-			return "crawl_backward_to_idle_right_start";
+			return "crawl_backwards_to_idle_right_start";
 		case 278:
-			return "crawl_backward_to_idle_right_end";
+			return "crawl_backwards_to_idle_right_end";
 		case 279:
-			return "crawl_backward_to_idle_left_start";
+			return "crawl_backwards_to_idle_left_start";
 		case 280:
-			return "crawl_backward_to_idle_left_end";
+			return "crawl_backwards_to_idle_left_end";
 		case 281:
 			return "crawl_turn_left_early_end";
 		case 282:
@@ -646,6 +646,328 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 			return "sprint_to_crouch_right";
 		case 312:
 			return "crouch_pickup_flare";
+		case 313:
+			return "door_open_forward";
+		case 314:
+			return "door_open_back";
+		case 315:
+			return "door_kick";
+		case 316:
+			return "giant_button_psuh";
+		case 317:
+			return "floor_trapdoor_open";
+		case 318:
+			return "ceiling_trapdoor_open";
+		case 319:
+			return "turnswitch_grab_left";
+		case 320:
+			return "turnswitch_grab_right";
+		case 321:
+			return "cogwheel_pull";
+		case 322:
+			return "cogwheel_grab";
+		case 323:
+			return "cogwheel_ungrab";
+		case 324:
+			return "leverswitch_push";
+		case 325:
+			return "hole_grab";
+		case 326:
+			return "stand_to_pole_grab";
+		case 327:
+			return "pole_jump";
+		case 328:
+			return "pole_idle";
+		case 329:
+			return "pole_climb_up";
+		case 330:
+			return "pole_fall";
+		case 331:
+			return "reach_to_pole_grab";
+		case 332:
+			return "pole_turn_left_start";
+		case 333:
+			return "pole_turn_right_start";
+		case 334:
+			return "pole_idle_to_climb_down";
+		case 335:
+			return "pole_climb_down";
+		case 336:
+			return "pole_climb_down_to_idle";
+		case 337:
+			return "jump_up_to_pole_grab";
+		case 338:
+			return "pole_climb_up_end";
+		case 339:
+			return "pulley_grab";
+		case 340:
+			return "pulley_pull";
+		case 341:
+			return "pulley_ungrab";
+		case 342:
+			return "pole_grab_to_stand";
+		case 343:
+			return "pole_turn_left_continue_unused";
+		case 344:
+			return "pole_turn_left_end";
+		case 345:
+			return "pole_turn_right_continue_unused";
+		case 346:
+			return "pole_turn_right_end";
+		case 347:
+			return "turnswitch_push_right_start";
+		case 348:
+			return "turnswitch_push_right_continue";
+		case 349:
+			return "turnswitch_push_right_send";
+		case 350:
+			return "turnswitch_push_left_start";
+		case 351:
+			return "turnswitch_push_left_continue";
+		case 352:
+			return "turnswitch_push_left_send";
+		case 353:
+			return "crouch_turn_left";
+		case 354:
+			return "crouch_turn_right";
+		case 355:
+			return "hang_corner_left_outer_start";
+		case 356:
+			return "hang_corner_left_outer_end";
+		case 357:
+			return "hang_corner_right_outer_start";
+		case 358:
+			return "hang_corner_right_outer_end";
+		case 359:
+			return "hang_corner_left_inner_start";
+		case 360:
+			return "hang_corner_left_inner_end";
+		case 361:
+			return "hang_corner_right_inner_start";
+		case 362:
+			return "hang_corner_right_inner_end";
+		case 363:
+			return "ladder_corner_left_outer_start";
+		case 364:
+			return "ladder_corner_left_outer_end";
+		case 365:
+			return "ladder_corner_right_outer_start";
+		case 366:
+			return "ladder_corner_right_outer_end";
+		case 367:
+			return "ladder_corner_left_inner_start";
+		case 368:
+			return "ladder_corner_left_inner_end";
+		case 369:
+			return "ladder_corner_right_inner_start";
+		case 370:
+			return "ladder_corner_right_inner_end";
+		case 371:
+			return "jump_up_to_rope_start";
+		case 372:
+			return "train_death";
+		case 373:
+			return "jump_up_to_rope_end";
+		case 374:
+			return "rope_idle";
+		case 375:
+			return "rope_down_start";
+		case 376:
+			return "rope_up";
+		case 377:
+			return "rope_idle_to_rope_hang_unused";
+		case 378:
+			return "rope_grab_to_fall_unused";
+		case 379:
+			return "rope_jump_to_grab";
+		case 380:
+			return "rope_idle_to_backflip_unused";
+		case 381:
+			return "rope_swing_to_fall_semi_front_unused";
+		case 382:
+			return "rope_swing_to_fall_middle_unused";
+		case 383:
+			return "rope_swing_to_fall_back_unused";
+		case 384:
+			return "rope_down";
+		case 385:
+			return "rope_down_end";
+		case 386:
+			return "rope_swing_to_reach";
+		case 387:
+			return "rope_idle_to_swing";
+		case 388:
+			return "rope_idle_to_swing_semi_middle_unused";
+		case 389:
+			return "rope_idle_to_swing_half_middle_unused";
+		case 390:
+			return "rope_swing_to_fall_front_unused";
+		case 391:
+			return "rope_grab_to_fall_alternate_unused";
+		case 392:
+			return "rope_turn_left";
+		case 393:
+			return "rope_turn_right";
+		case 394:
+			return "rope_swing";
+		case 395:
+			return "ladder_to_hands_down_alternate_unused";
+		case 396:
+			return "rope_swing_back_continue_unused";
+		case 397:
+			return "rope_swing_back_end_unused";
+		case 398:
+			return "rope_swing_back_start_unused";
+		case 399:
+			return "rope_swing_forward_soft_unused";
+		case 400:
+			return "pour_waterskin_low";
+		case 401:
+			return "fill_waterskin";
+		case 402:
+			return "pour_waterskin_high";
+		case 403:
+			return "pry_door";
+		case 404:
+			return "rope_swing_forward_hard_unused";
+		case 405:
+			return "rope_change_rope_unused";
+		case 406:
+			return "rope_swing_to_reach_front";
+		case 407:
+			return "rope_swing_to_reach_middle";
+		case 408:
+			return "rope_swing_block_unused";
+		case 409:
+			return "rope_swing_to_reach_semi_middle";
+		case 410:
+			return "rope_swing_to_reach_hang_front";
+		case 411:
+			return "rope_swing_to_reach_front2";
+		case 412:
+			return "double_doors_push";
+		case 413:
+			return "big_button_push";
+		case 414:
+			return "jumpswitch";
+		case 415:
+			return "underwater_pulley";
+		case 416:
+			return "underwater_door_open";
+		case 417:
+			return "pushable_push_to_stand";
+		case 418:
+			return "pushable_pull_to_stand";
+		case 419:
+			return "crowbar_use_on_wall";
+		case 420:
+			return "crowbar_use_on_floor";
+		case 421:
+			return "crawl_jump_down";
+		case 422:
+			return "harp_play";
+		case 423:
+			return "put_trident";
+		case 424:
+			return "pickup_pedestal_high";
+		case 425:
+			return "pickup_pedestal_low";
+		case 426:
+			return "rotate_senet";
+		case 427:
+			return "torch_light_1";
+		case 428:
+			return "torch_light_2";
+		case 429:
+			return "torch_light_3";
+		case 430:
+			return "torch_light_4";
+		case 431:
+			return "torch_light_5";
+		case 432:
+			return "detonator_use";
+		case 433:
+			return "correct_position_front_unused";
+		case 434:
+			return "correct_position_left_unused";
+		case 435:
+			return "correct_position_right_unused";
+		case 436:
+			return "crowbar_use_on_floor_fail_unused";
+		case 437:
+			return "use_keycard";
+		case 438:
+			return "death_blowup";
+		case 439:
+			return "pickup_sarcophagus";
+		case 440:
+			return "drag_body";
+		case 441:
+			return "binoculars";
+		case 442:
+			return "death_big_scorpion";
+		case 443:
+			return "elevator_smash";
+		case 444:
+			return "beetle_put";
+		case 445:
+			return "dozy";
+		case 446:
+			return "tightrope_walk";
+		case 447:
+			return "tightrope_walk_to_stand";
+		case 448:
+			return "tightrope_stand";
+		case 449:
+			return "tightrope_walk_to_stand_careful";
+		case 450:
+			return "tightrope_stand_to_walk";
+		case 451:
+			return "tightrope_turn";
+		case 452:
+			return "tightrope_loose_left";
+		case 453:
+			return "tightrope_recover_left";
+		case 454:
+			return "tightrope_fall_left";
+		case 455:
+			return "tightrope_loose_right";
+		case 456:
+			return "tightrope_recover_right";
+		case 457:
+			return "tightrope_fall_right";
+		case 458:
+			return "tightrope_start";
+		case 459:
+			return "tightrope_finish";
+		case 460:
+			return "doveswitch_turn";
+		case 461:
+			return "bars_grab";
+		case 462:
+			return "bars_swing";
+		case 463:
+			return "bars_jump";
+		case 464:
+			return "loot_cabinet";
+		case 465:
+			return "loot_drawer";
+		case 466:
+			return "loot_shelf";
+		case 467:
+			return "radio_start";
+		case 468:
+			return "radio_idle";
+		case 469:
+			return "radio_end";
+		case 470:
+			return "valve_turn";
+		case 471:
+			return "crowbar_use_on_wall";
+		case 472:
+			return "loot_chest";
+		case 473:
+			return "ladder_to_crouch";
 	}
 	return String("animation_") + itos(p_animation_id);
 }
@@ -738,5 +1060,265 @@ static String get_animation_name(uint32_t p_type_info_id, uint32_t p_animation_i
 			return get_tr4_animation_name(p_type_info_id, p_animation_id);
 		default:
 			return String("animation_") + itos(p_animation_id);
+	}
+}
+
+static String get_default_state_name(uint32_t p_state_id) {
+	return String("state_") + itos(p_state_id);
+}
+
+static String get_lara_state_name(uint32_t p_state_id) {
+	switch (p_state_id) {
+		case 0:
+			return "Walk";
+		case 1:
+			return "Run";
+		case 2:
+			return "Stop";
+		case 3:
+			return "ForwardJump";
+		case 4:
+			return "Pose";
+		case 5:
+			return "HopBackwards";
+		case 6:
+			return "TurnRight";
+		case 7:
+			return "TurnLeft";
+		case 8:
+			return "Death";
+		case 9:
+			return "FastFall";
+		case 10:
+			return "Hang";
+		case 11:
+			return "Reach";
+		case 12:
+			return "FallDeath";
+		case 13:
+			return "UnderwaterStop";
+		case 14:
+			return "Land";
+		case 15:
+			return "Compress";
+		case 16:
+			return "WalkBackwards";
+		case 17:
+			return "UnderwaterSwim";
+		case 18:
+			return "UnderwaterGlide";
+		case 19:
+			return "Grabbing";
+		case 20:
+			return "FastTurn";
+		case 21:
+			return "StepLeft";
+		case 22:
+			return "StepRight";
+		case 23:
+			return "AltRoll";
+		case 24:
+			return "Slide";
+		case 25:
+			return "BackwardsJump";
+		case 26:
+			return "RightJump";
+		case 27:
+			return "LeftJump";
+		case 28:
+			return "UpJump";
+		case 29:
+			return "FallBack";
+		case 30:
+			return "ShimmyLeft";
+		case 31:
+			return "ShimmyRight";
+		case 32:
+			return "SlideBackwards";
+		case 33:
+			return "OnWaterIdle";
+		case 34:
+			return "OnWaterSwimForwards";
+		case 35:
+			return "Dive";
+		case 36:
+			return "PushBlock";
+		case 37:
+			return "PullBlock";
+		case 38:
+			return "PushPullReady";
+		case 39:
+			return "Pickup";
+		case 40:
+			return "SwitchOn";
+		case 41:
+			return "SwitchOff";
+		case 42:
+			return "InsertKey";
+		case 43:
+			return "InsertPuzzle";
+		case 44:
+			return "UnderwaterDeath";
+		case 45:
+			return "Roll";
+		case 46:
+			return "Special";
+		case 47:
+			return "OnWaterSwimBackwards";
+		case 48:
+			return "OnWaterSwimLeft";
+		case 49:
+			return "OnWaterSwimRight";
+		case 50:
+			return "UseMidasPuzzle";
+		case 51:
+			return "MidasPuzzleDeath";
+		case 52:
+			return "SwanDiveBegin";
+		case 53:
+			return "SwanDiveEnd";
+		case 54:
+			return "Handstand";
+		case 55:
+			return "OnWaterExit";
+		case 56:
+			return "OnLadderIdle";
+		case 57:
+			return "OnLadderUp";
+		case 58:
+			return "OnLadderLeft";
+		case 59:
+			return "OnLadderStop";
+		case 60:
+			return "OnLadderRight";
+		case 61:
+			return "OnLadderDown";
+		case 62:
+			return "Test1";
+		case 63:
+			return "Test2";
+		case 64:
+			return "Test3";
+		case 65:
+			return "WadeForwards";
+		case 66:
+			return "UnderwaterRoll";
+		case 67:
+			return "FlarePickup";
+		case 68:
+			return "SwanDiveRoll";
+		case 69:
+			return "Kick";
+		case 70:
+			return "ZiplineRide";
+		case 71:
+			return "CrouchIdle";
+		case 72:
+			return "CrouchRoll";
+		case 73:
+			return "Sprint";
+		case 74:
+			return "SprintRoll";
+		case 75:
+			return "MonkeyIdle";
+		case 76:
+			return "MonkeyForwards";
+		case 77:
+			return "MonkeyLeft";
+		case 78:
+			return "MonkeyRight";
+		case 79:
+			return "MonkeyRoll";
+		case 80:
+			return "CrawlIdle";
+		case 81:
+			return "CrawlForward";
+		case 82:
+			return "MonkeyTurnLeft";
+		case 83:
+			return "MonkeyTurnRight";
+		case 84:
+			return "CrawlTurnLeft";
+		case 85:
+			return "CrawlTurnRight";
+		case 86:
+			return "CrawlBackwards";
+		case 87:
+			return "ClimbToCrawl";
+		case 88:
+			return "CrawlToClimb";
+		case 89:
+			return "MiscControlled";
+		case 90:
+			return "RopeTurnLeft";
+		case 91:
+			return "RopeTurnRight";
+		case 92:
+			return "GiantButtonPush";
+		case 93:
+			return "TrapdoorFloorOpen";
+		case 94:
+			return "TrapdoorCeilingOpen";
+		case 95:
+			return "RoundHandle";
+		case 96:
+			return "CogWheel";
+		case 97:
+			return "LeverSwitchPush";
+		case 98:
+			return "Hole";
+		case 99:
+			return "PoleIdle";
+		case 100:
+			return "PoleUp";
+		case 101:
+			return "PoleDown";
+		case 102:
+			return "PoleTurnLeft";
+		case 103:
+			return "PoleTurnRight";
+		case 104:
+			return "Pulley";
+		case 105:
+			return "CrouchTurnLeft";
+		case 106:
+			return "CrouchTurnRight";
+		case 107:
+			return "ShimmyOuterLeft";
+		case 108:
+			return "ShimmyOuterRight";
+		case 109:
+			return "ShimmyInnerLeft";
+		case 110:
+			return "ShimmyInnerRight";
+		case 111:
+			return "RopeIdle";
+		case 112:
+			return "RopeClimbUp";
+		case 113:
+			return "RopeClimbDown";
+		case 114:
+			return "RopeSwing";
+		case 115:
+			return "LadderToShimmy";
+		case 116:
+			return "PositionCorrector";
+		case 117:
+			return "DoubleDoorsPush";
+		case 118:
+			return "Dozy";
+		default:
+			return get_default_state_name(p_state_id);
+	}
+}
+
+static String get_state_name(uint32_t p_type_info_id, uint32_t p_state_id, TRLevelFormat p_level_format) {
+	switch (p_type_info_id) {
+		case 0:
+			return get_lara_state_name(p_state_id);
+			break;
+		default:
+			return get_default_state_name(p_state_id);
+			break;
 	}
 }

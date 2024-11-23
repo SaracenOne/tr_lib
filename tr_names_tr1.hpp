@@ -8,13 +8,13 @@ static String get_tr1_type_info_name(size_t p_type_info_id) {
 	case 0:
 		return "Lara";
 	case 1:
-		return "Lara Pistol Animation";
+		return "Lara Pistols Animations";
 	case 2:
-		return "Lara Shotgun Animation";
+		return "Lara Shotgun Animations";
 	case 3:
-		return "Lara Magnum Animation";
+		return "Lara Magnums Animations";
 	case 4:
-		return "Lara Uzi Animation";
+		return "Lara Uzis Animations";
 	case 5:
 		return "Lara Misc Animations";
 	case 6:
