@@ -711,6 +711,7 @@ struct TRInterpolatedFrame {
 
 TRInterpolatedFrame get_final_frame_for_animation(int32_t p_anim_idx, Vector<TRAnimation> &p_animations) {
 	TRInterpolatedFrame interpolated_frame;
+	interpolated_frame.interpolation = 0.0;
 
 	ERR_FAIL_INDEX_V(p_anim_idx, p_animations.size(), interpolated_frame);
 
@@ -734,11 +735,9 @@ TRInterpolatedFrame get_final_frame_for_animation(int32_t p_anim_idx, Vector<TRA
 	int32_t next_keyframe_modulo = next_frame_idx % tr_next_animation.frame_skip;
 
 	if (p_anim_idx == next_animation_number && tr_animation_current.next_frame_number == tr_animation_current.frame_end) {
-		interpolated_frame.interpolation = 0.0;
 		interpolated_frame.first_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
 		interpolated_frame.second_frame = tr_next_animation.frames[tr_next_animation.frames.size() - 1];
-	}
-	else {
+	} else {
 		if (tr_next_animation.frame_skip > 0) {
 			int32_t keyframe_idx = next_frame_idx / tr_next_animation.frame_skip;
 			ERR_FAIL_INDEX_V(keyframe_idx, tr_next_animation.frames.size(), interpolated_frame);
