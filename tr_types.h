@@ -10,6 +10,8 @@
 #include <godot_cpp/core/class_db.hpp>
 #endif
 
+#define TR_TEXTILE_SIZE 256
+
 typedef int16_t tr_angle;
 
 struct TRVertex {

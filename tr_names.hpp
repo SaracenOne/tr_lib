@@ -1070,9 +1070,9 @@ static String get_default_state_name(uint32_t p_state_id) {
 static String get_lara_state_name(uint32_t p_state_id) {
 	switch (p_state_id) {
 		case 0:
-			return "Walk";
+			return "WalkForwards";
 		case 1:
-			return "Run";
+			return "RunForwards";
 		case 2:
 			return "Stop";
 		case 3:
@@ -1112,13 +1112,13 @@ static String get_lara_state_name(uint32_t p_state_id) {
 		case 20:
 			return "FastTurn";
 		case 21:
-			return "StepLeft";
-		case 22:
 			return "StepRight";
+		case 22:
+			return "StepLeft";
 		case 23:
 			return "AltRoll";
 		case 24:
-			return "Slide";
+			return "SlideForwards";
 		case 25:
 			return "BackwardsJump";
 		case 26:

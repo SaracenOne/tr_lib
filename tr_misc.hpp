@@ -122,3 +122,19 @@ static Basis get_overwritten_mesh_rotation(uint32_t p_type_info_id, uint32_t p_m
 	return Basis();
 }
 
+struct AnimationNodeMetaInfo {
+	String animation_name;
+	String animation_path;
+	Vector2 position;
+};
+
+const AnimationNodeMetaInfo lara_animation_node_meta_info[] = {
+	{"", "", Vector2(0.0, 0.0)},
+};
+
+#define FIND_ANIMATION_META_INFO(current_array, p_animation_name) \
+	for (const AnimationNodeMetaInfo &E : current_array) { \
+		if (E.animation_name == p_animation_name) { return &E; } \
+	} \
+
+extern const AnimationNodeMetaInfo* get_animation_node_meta_info_for_animation(uint32_t p_type_info_id, StringName p_animation_name, TRLevelFormat p_level_format);
