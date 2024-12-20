@@ -9,14 +9,9 @@ void gdextension_initialize(ModuleInitializationLevel p_level) {
 #endif
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		ClassDB::register_class<TRLevel>();
+		ClassDB::register_class<TRLevelData>();
 
 		EditorPlugins::add_by_type<TRLevelEditorPlugin>();
-#if 0
-		Ref<TRLevelImporter> level_importer;
-		level_importer.instantiate();
-
-		ResourceImporterScene::add_importer(level_importer, true);
-#endif
 	}
 }
 

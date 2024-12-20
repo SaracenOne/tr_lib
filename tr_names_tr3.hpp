@@ -1,6 +1,7 @@
 #pragma once
 #include "tr_level.hpp"
 #include "tr_names.hpp"
+#include "tr_level_data.hpp"
 
 static String get_tr3_type_info_name(uint32_t p_type_info_id) {
 	switch (p_type_info_id) {

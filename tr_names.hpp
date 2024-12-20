@@ -1,6 +1,7 @@
 #pragma once
 #include "tr_misc.hpp"
 #include "tr_level.hpp"
+#include "tr_level_data.hpp"
 
 static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_level_format) {
 	switch(p_animation_id) {
@@ -1013,6 +1014,7 @@ static String get_lara_bone_name(size_t p_bone_id) {
 #include "tr_names_tr2.hpp"
 #include "tr_names_tr3.hpp"
 #include "tr_names_tr4.hpp"
+#include "tr_level_data.hpp"
 
 static String get_type_info_name(uint32_t p_type_info_id, TRLevelFormat p_level_format) {
 	switch(p_level_format) {
@@ -1025,9 +1027,11 @@ static String get_type_info_name(uint32_t p_type_info_id, TRLevelFormat p_level_
 	case TRLevelFormat::TR4_PC:
 		return get_tr4_type_info_name(p_type_info_id);
 	default:
-		return String("MovableInfo_") + itos(p_type_info_id);
+		return String("MoveableInfo_") + itos(p_type_info_id);
 	}
 }
+
+extern bool is_lara_compatible_humanoid(uint32_t p_type_info_id, TRLevelFormat p_level_format);
 
 static String get_bone_name(uint32_t p_type_info_id, uint32_t p_bone_id, TRLevelFormat p_level_format) {
 	if (is_lara_compatible_humanoid(p_type_info_id, p_level_format)) {

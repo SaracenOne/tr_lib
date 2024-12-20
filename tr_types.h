@@ -400,19 +400,3 @@ enum TRTextureType {
 	TR_TEXTURE_TYPE_16,
 	TR_TEXTURE_TYPE_32
 };
-
-struct TRLevelData {
-	TRLevelFormat format;
-	TRTextureType texture_type;
-	Vector<PackedByteArray> level_textures;
-	Vector<PackedByteArray> entity_textures;
-	Vector<TRColor3> palette;
-	Vector<TRRoom> rooms;
-	PackedByteArray floor_data;
-	TRTypes types;
-	Vector<TREntity> entities;
-	Vector<uint16_t> sound_map;
-	Vector<TRSoundInfo> sound_infos;
-	PackedByteArray sound_buffer;
-	PackedInt32Array sound_indices;
-};

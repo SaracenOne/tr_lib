@@ -1,7 +1,7 @@
 #pragma once
 #include "tr_level.hpp"
 #include "tr_names.hpp"
-
+#include "tr_level_data.hpp"
 
 static String get_tr1_type_info_name(size_t p_type_info_id) {
 	switch (p_type_info_id) {

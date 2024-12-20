@@ -22,6 +22,7 @@
 #include <scene/resources/image_texture.h>
 #include <scene/3d/marker_3d.h>
 #include <scene/3d/remote_transform_3d.h>
+#include <scene/3d/physics/animatable_body_3d.h>
 
 
 #ifdef IS_MODULE
@@ -397,7 +398,7 @@ Node3D *create_godot_moveable_model(
 			scaled_root->set_name("ScaledRoot");
 			new_type_info->add_child(scaled_root);
 
-			StaticBody3D *avatar_bounds = memnew(StaticBody3D);
+			AnimatableBody3D *avatar_bounds = memnew(AnimatableBody3D);
 			avatar_bounds->set_name("AvatarBounds");
 			avatar_bounds->set_collision_layer(0);
 			avatar_bounds->set_collision_mask(0);
@@ -433,7 +434,6 @@ Node3D *create_godot_moveable_model(
 			AnimationNodeStateMachine *state_machine = memnew(AnimationNodeStateMachine);
 			AnimationTree *animation_tree = memnew(AnimationTree);
 			animation_tree->set_name("AnimationTree");
-			animation_tree->set_root_animation_node(state_machine);
 			new_type_info->add_child(animation_tree);
 			animation_tree->set_animation_player(animation_tree->get_path_to(animation_player));
 			animation_tree->set_active(false);
@@ -540,7 +540,7 @@ Node3D *create_godot_moveable_model(
 					Dictionary state_change_dict;
 					int16_t target_animation_state = state_change.target_animation_state;
 					int16_t dispatch_index = state_change.dispatch_index;
-					state_change_dict.set("target_animation_state", target_animation_state);
+					state_change_dict.set("target_animation_state_id", target_animation_state);
 					state_change_dict.set("target_animation_state_name", get_state_name(p_type_info_id, target_animation_state, p_level_format));
 
 					Array dispatches;
@@ -737,7 +737,7 @@ Node3D *create_godot_moveable_model(
 				String next_animation_name = get_animation_name(p_type_info_id, tr_animation.next_animation_number - p_moveable_info.animation_index, p_level_format);
 
 				godot_animation->set_meta("tr_animation_state_changes", animation_state_changes);
-				godot_animation->set_meta("tr_animation_current_animation_state", tr_animation.current_animation_state);
+				godot_animation->set_meta("tr_animation_current_animation_state_id", tr_animation.current_animation_state);
 				godot_animation->set_meta("tr_animation_current_animation_state_name", get_state_name(p_type_info_id, tr_animation.current_animation_state, p_level_format));
 
 				godot_animation->set_meta("tr_animation_frame_skip", tr_animation.frame_skip);
@@ -774,6 +774,8 @@ Node3D *create_godot_moveable_model(
 
 				animation_position_offsets.append(position_offset);
 			}
+
+			animation_tree->set_root_animation_node(get_animation_tree_root_node_for_object(p_type_info_id, p_level_format, state_machine));
 
 			animation_player->add_animation_library("", animation_library);
 			animation_player->set_current_animation("RESET");
@@ -1475,9 +1477,17 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 	Ref<ArrayMesh> ar_mesh = memnew(ArrayMesh);
 
 	Vector<TRVertex> mesh_verts;
+	Vector<TRVertex> mesh_normals;
 
 	for (int32_t i = 0; i < p_mesh_data.vertices.size(); i++) {
 		mesh_verts.push_back(p_mesh_data.vertices[i]);
+	}
+
+	// Only use mesh normals if normals count is positive. It otherwise counts as vertex lighting.
+	if (p_mesh_data.normal_count == p_mesh_data.normals.size()) {
+		for (int32_t i = 0; i < p_mesh_data.normals.size(); i++) {
+			mesh_normals.push_back(p_mesh_data.normals[i]);
+		}
 	}
 
 	struct VertexAndUV {
@@ -1609,13 +1619,23 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 
 			Vector2 uv = Vector2(u_fixed_16_to_float(vertex_and_uv.uv.u, false) / 255.0f, u_fixed_16_to_float(vertex_and_uv.uv.v, false) / 255.0f);
 			st->set_uv(uv);
+			
+			if (vertex_and_uv.vertex_idx < mesh_normals.size()) {
+				TRVertex normal = mesh_normals[vertex_and_uv.vertex_idx];
+				Vector3 normal_float = Vector3(
+					normal.x * TR_TO_GODOT_SCALE,
+					normal.y * -TR_TO_GODOT_SCALE,
+					normal.z * -TR_TO_GODOT_SCALE);
 
-			Vector3 vec3 = Vector3(
+				st->set_normal(normal_float);
+			}
+
+			Vector3 vertex_float = Vector3(
 				vertex.x * TR_TO_GODOT_SCALE,
 				vertex.y * -TR_TO_GODOT_SCALE,
 				vertex.z * -TR_TO_GODOT_SCALE);
 
-			st->add_vertex(vec3);
+			st->add_vertex(vertex_float);
 		}
 
 		for (int32_t i = 0; i < color_index_map.size(); i++) {
@@ -1643,12 +1663,22 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 			Vector2 uv = Vector2(u_fixed_16_to_float(vertex_and_uv.uv.u, false) / 255.0f, u_fixed_16_to_float(vertex_and_uv.uv.v, false) / 255.0f);
 			st->set_uv(uv);
 
-			Vector3 vec3 = Vector3(
+			if (vertex_and_uv.vertex_idx < mesh_normals.size()) {
+				TRVertex normal = mesh_normals[vertex_and_uv.vertex_idx];
+				Vector3 normal_float = Vector3(
+					normal.x * TR_TO_GODOT_SCALE,
+					normal.y * -TR_TO_GODOT_SCALE,
+					normal.z * -TR_TO_GODOT_SCALE);
+
+				st->set_normal(normal_float);
+			}
+
+			Vector3 vertex_float = Vector3(
 				vertex.x * TR_TO_GODOT_SCALE,
 				vertex.y * -TR_TO_GODOT_SCALE,
 				vertex.z * -TR_TO_GODOT_SCALE);
 
-			st->add_vertex(vec3);
+			st->add_vertex(vertex_float);
 		}
 
 		for (int32_t i = 0; i < material_index_map.get(current_tex_page).size(); i++) {
@@ -2151,8 +2181,10 @@ void set_owner_recursively(Node *p_node, Node *p_owner) {
 
 Node3D *generate_godot_scene(
 	Node *p_root,
-	TRLevelData level_data,
+	Ref<TRLevelData> p_level_data,
 	bool p_lara_only) {
+
+	ERR_FAIL_COND_V(p_level_data.is_null(), nullptr);
 
 	Vector<Ref<Material>> level_materials;
 	Vector<Ref<Material>> level_trans_materials;
@@ -2206,13 +2238,13 @@ Node3D *generate_godot_scene(
 	Ref<Material> palette_material;
 	
 	// Palette Texture
-	if (!level_data.palette.is_empty()) {
+	if (!p_level_data->palette.is_empty()) {
 		Ref<Image> palette_image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
 		for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 			for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 				uint32_t index = ((y / 16) * 16) + (x / 16);
 
-				TRColor3 color = level_data.palette.get(index);
+				TRColor3 color = p_level_data->palette.get(index);
 				palette_image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 			}
 		}
@@ -2225,25 +2257,25 @@ Node3D *generate_godot_scene(
 
 	Vector<Ref<ImageTexture>> image_textures;
 
-	for (int32_t i = 0; i < level_data.level_textures.size(); i++) {
-		PackedByteArray current_texture = level_data.level_textures.get(i);
+	for (int32_t i = 0; i < p_level_data->level_textures.size(); i++) {
+		PackedByteArray current_texture = p_level_data->level_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
+		if (p_level_data->texture_type == TR_TEXTURE_TYPE_8_PAL) {
 			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 					if (index == 0x00) {
-						TRColor3 color = level_data.palette.get(index);
+						TRColor3 color = p_level_data->palette.get(index);
 						image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
 					}
 					else {
-						TRColor3 color = level_data.palette.get(index);
+						TRColor3 color = p_level_data->palette.get(index);
 						image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 					}
 				}
 			}
-		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
+		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_32) {
 			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
@@ -2265,25 +2297,25 @@ Node3D *generate_godot_scene(
 		image_textures.push_back(ImageTexture::create_from_image(image));
 	}
 
-	for (int32_t i = 0; i < level_data.entity_textures.size(); i++) {
-		PackedByteArray current_texture = level_data.entity_textures.get(i);
+	for (int32_t i = 0; i < p_level_data->entity_textures.size(); i++) {
+		PackedByteArray current_texture = p_level_data->entity_textures.get(i);
 		Ref<Image> image = memnew(Image(TR_TEXTILE_SIZE, TR_TEXTILE_SIZE, false, Image::FORMAT_RGBA8));
-		if (level_data.texture_type == TR_TEXTURE_TYPE_8_PAL) {
+		if (p_level_data->texture_type == TR_TEXTURE_TYPE_8_PAL) {
 			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint8_t index = current_texture.get((y * TR_TEXTILE_SIZE) + x);
 
 					if (index == 0x00) {
-						TRColor3 color = level_data.palette.get(index);
+						TRColor3 color = p_level_data->palette.get(index);
 						image->set_pixel(x, y, Color(0.0f, 0.0f, 0.0f, 0.0f));
 					}
 					else {
-						TRColor3 color = level_data.palette.get(index);
+						TRColor3 color = p_level_data->palette.get(index);
 						image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 					}
 				}
 			}
-		} else if (level_data.texture_type == TR_TEXTURE_TYPE_32) {
+		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_32) {
 			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
 					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint32_t);
@@ -2314,16 +2346,16 @@ Node3D *generate_godot_scene(
 
 
 	Vector<Ref<ArrayMesh>> meshes;
-	for (TRMesh& tr_mesh : level_data.types.meshes) {
-		Ref<ArrayMesh> mesh = tr_mesh_to_godot_mesh(tr_mesh, entity_materials, entity_trans_materials, palette_material, level_data.types);
+	for (TRMesh& tr_mesh : p_level_data->types.meshes) {
+		Ref<ArrayMesh> mesh = tr_mesh_to_godot_mesh(tr_mesh, entity_materials, entity_trans_materials, palette_material, p_level_data->types);
 		meshes.push_back(mesh);
 	}
 
 	Vector<Ref<AudioStream>> samples;
 
 	// Audio
-	if (!level_data.sound_buffer.is_empty()) {
-		for (TRSoundInfo tr_sound_info : level_data.sound_infos) {
+	if (!p_level_data->sound_buffer.is_empty()) {
+		for (TRSoundInfo tr_sound_info : p_level_data->sound_infos) {
 			int32_t sample_id = tr_sound_info.sample_index;
 			int32_t loop_mode = tr_sound_info.characteristics & 0x2;;
 			int32_t sample_count = (tr_sound_info.characteristics >> 2) & 0xF;
@@ -2348,8 +2380,8 @@ Node3D *generate_godot_scene(
 			sample_collection->set_playback_mode(AudioStreamRandomizer::PLAYBACK_RANDOM);
 
 			for (int32_t i = 0; i < sample_count; i++) {
-				uint32_t sample_offset = level_data.sound_indices.get(sample_id + i);
-				Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(level_data.sound_buffer);
+				uint32_t sample_offset = p_level_data->sound_indices.get(sample_id + i);
+				Ref<TRFileAccess> buffer_access = TRFileAccess::create_from_buffer(p_level_data->sound_buffer);
 
 				Ref<AudioStreamWAV> sample = memnew(AudioStreamWAV);
 				if (sample_offset == 0xffffffff) {
@@ -2409,11 +2441,11 @@ Node3D *generate_godot_scene(
 		rooms_node->set_owner(scene_owner);
 
 		Vector<Node3D*> moveable_node = create_godot_nodes_for_moveables(
-			level_data.types.moveable_info_map,
-			level_data.types,
+			p_level_data->types.moveable_info_map,
+			p_level_data->types,
 			meshes,
 			samples,
-			level_data.format);
+			p_level_data->format);
 
 #if 0
 		for (Node3D *moveable : moveable_node) {
@@ -2429,7 +2461,7 @@ Node3D *generate_godot_scene(
 		entities_node->set_owner(scene_owner);
 
 		uint32_t entity_idx = 0;
-		for (const TREntity& entity : level_data.entities) {
+		for (const TREntity& entity : p_level_data->entities) {
 			Node3D *entity_node = memnew(Node3D);
 
 			real_t degrees_rotation = (real_t)((entity.transform.rot.y / 16384.0) * -90.0) + 180.0;
@@ -2440,18 +2472,18 @@ Node3D *generate_godot_scene(
 					entity.transform.pos.z * -TR_TO_GODOT_SCALE)));
 
 			entities_node->add_child(entity_node);
-			entity_node->set_name("Entity_" + itos(entity_idx) + " (" + get_type_info_name(entity.type_id, level_data.format) + ")");
+			entity_node->set_name("Entity_" + itos(entity_idx) + " (" + get_type_info_name(entity.type_id, p_level_data->format) + ")");
 			entity_node->set_owner(scene_owner);
 			entity_node->set_display_folded(true);
 
-			if (level_data.types.moveable_info_map.has(entity.type_id)) {
+			if (p_level_data->types.moveable_info_map.has(entity.type_id)) {
 				Node3D *new_node = create_godot_moveable_model(
 					entity.type_id,
-					level_data.types.moveable_info_map[entity.type_id],
-					level_data.types,
+					p_level_data->types.moveable_info_map[entity.type_id],
+					p_level_data->types,
 					meshes,
 					samples,
-					level_data.format,
+					p_level_data->format,
 					false);
 				ERR_FAIL_NULL_V(new_node, nullptr);
 				Node3D *type = new_node;
@@ -2464,7 +2496,7 @@ Node3D *generate_godot_scene(
 	
 
 		uint32_t room_idx = 0;
-		for (const TRRoom& room : level_data.rooms) {
+		for (const TRRoom& room : p_level_data->rooms) {
 			Node3D *node_3d = memnew(Node3D);
 			node_3d->set_name(String("Room_") + itos(room_idx));
 			node_3d->set_display_folded(true);
@@ -2478,7 +2510,7 @@ Node3D *generate_godot_scene(
 					mi->set_name(String("RoomMesh_") + itos(room_idx));
 					node_3d->add_child(mi);
 
-					Ref<ArrayMesh> mesh = tr_room_data_to_godot_mesh(room.data, level_materials, level_trans_materials, level_data.types);
+					Ref<ArrayMesh> mesh = tr_room_data_to_godot_mesh(room.data, level_materials, level_trans_materials, p_level_data->types);
 
 					mi->set_position(Vector3());
 					mi->set_owner(scene_owner);
@@ -2486,14 +2518,14 @@ Node3D *generate_godot_scene(
 					mi->set_layer_mask(1 << 0);
 				}
 
-				StaticBody3D* static_body = memnew(StaticBody3D);
+				StaticBody3D *static_body = memnew(StaticBody3D);
 				if (static_body) {
 					static_body->set_name(String("RoomStaticBody3D_") + itos(room_idx));
 					node_3d->add_child(static_body);
 					static_body->set_owner(scene_owner);
 					static_body->set_position(Vector3());
 
-					CollisionShape3D* collision_shape = tr_room_to_godot_collision_shape(room, level_data.floor_data, level_data.rooms);
+					CollisionShape3D *collision_shape = tr_room_to_godot_collision_shape(room, p_level_data->floor_data, p_level_data->rooms);
 
 					static_body->add_child(collision_shape);
 					collision_shape->set_owner(scene_owner);
@@ -2504,12 +2536,12 @@ Node3D *generate_godot_scene(
 				for (const TRRoomStaticMesh& room_static_mesh : room.room_static_meshes) {
 					int32_t mesh_static_number = room_static_mesh.mesh_id;
 
-					if (level_data.types.static_info_map.has(mesh_static_number)) {
-						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
+					if (p_level_data->types.static_info_map.has(mesh_static_number)) {
+						TRStaticInfo static_info = p_level_data->types.static_info_map[mesh_static_number];
 					}
 
-					if (level_data.types.static_info_map.has(mesh_static_number)) {
-						TRStaticInfo static_info = level_data.types.static_info_map[mesh_static_number];
+					if (p_level_data->types.static_info_map.has(mesh_static_number)) {
+						TRStaticInfo static_info = p_level_data->types.static_info_map[mesh_static_number];
 						if (static_info.flags & 2) {
 							int32_t mesh_number = static_info.mesh_number;
 							if (mesh_number < meshes.size() && mesh_number >= 0) {
@@ -2538,11 +2570,11 @@ Node3D *generate_godot_scene(
 	} else {
 		Node3D *new_node = create_godot_moveable_model(
 			0,
-			level_data.types.moveable_info_map[0],
-			level_data.types,
+			p_level_data->types.moveable_info_map[0],
+			p_level_data->types,
 			meshes,
 			samples,
-			level_data.format,
+			p_level_data->format,
 			true);
 		ERR_FAIL_COND_V(!new_node, nullptr);
 

@@ -29,7 +29,7 @@ protected:
 		get_editor_interface()->mark_scene_as_unsaved();
 	}
 public:
-	virtual String get_name() const override { return "TRLevel"; }
+	virtual String get_plugin_name() const override { return "TRLevel"; }
 	bool has_main_screen() const override { return false; }
 
 	void edit(Object* p_object) {

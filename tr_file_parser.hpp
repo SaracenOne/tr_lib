@@ -1,3 +1,5 @@
+#pragma once
+
 #include "core/object/class_db.h"
 #include "core/string/ustring.h"
 #include "core/io/file_access.h"

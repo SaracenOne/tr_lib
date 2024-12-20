@@ -3,8 +3,9 @@
 #include <core/io/stream_peer_gzip.h>
 #include "core/math/math_funcs.h"
 #include <editor/editor_file_system.h> 
+#include "tr_level_data.hpp"
 #include "tr_godot_conversion.hpp"
-
+#include "tr_file_parser.hpp"
 
 #ifdef IS_MODULE
 using namespace godot;
@@ -1340,7 +1341,7 @@ void TRLevel::clear_level() {
 }
 
 void TRLevel::load_level(bool p_lara_only) {
-	TRLevelData level_data = load_level_type(level_path);
+	Ref<TRLevelData> level_data = load_level_type(level_path);
 
 	Node3D *rooms_node = generate_godot_scene(
 		this, 
@@ -1348,7 +1349,7 @@ void TRLevel::load_level(bool p_lara_only) {
 		p_lara_only);
 }
 
-TRLevelData TRLevel::load_level_type(String file_path) {
+Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
 	Vector<TRColor3> palette;
 	Vector<TRColor4> palette32;
 	TRTextureType texture_type = TR_TEXTURE_TYPE_8_PAL;
@@ -1357,8 +1358,12 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 	PackedByteArray other_decompressed_buffer;
 
 	Error error;
-	TRLevelData level_data;
-	level_data.format = TR_VERSION_UNKNOWN;
+	Ref<TRLevelData> level_data;
+	level_data.instantiate();
+
+	ERR_FAIL_COND_V(level_data.is_null(), nullptr);
+
+	level_data->format = TR_VERSION_UNKNOWN;
 
 	Ref<TRFileAccess> file = TRFileAccess::open(level_path, &error);
 	if (error != Error::OK) {
@@ -1571,7 +1576,7 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 	}
 
 	if (format == TR4_PC) {
-		PackedByteArray seperator = file->get_buffer(6);
+		PackedByteArray _seperator = file->get_buffer(6);
 	}
 
 #if 0
@@ -1579,19 +1584,19 @@ TRLevelData TRLevel::load_level_type(String file_path) {
 	dump_8bit_textures(object_textures, palette);
 #endif
 
-	level_data.format = format;
-	level_data.texture_type = texture_type;
-	level_data.level_textures = level_textures;
-	level_data.entity_textures = entity_textures;
-	level_data.palette = palette;
-	level_data.rooms = rooms;
-	level_data.entities = entities;
-	level_data.types = types;
-	level_data.floor_data = floor_data;
-	level_data.sound_map = sound_map;
-	level_data.sound_infos = sound_infos;
-	level_data.sound_buffer = sound_buffer;
-	level_data.sound_indices = sound_indices;
+	level_data->format = format;
+	level_data->texture_type = texture_type;
+	level_data->level_textures = level_textures;
+	level_data->entity_textures = entity_textures;
+	level_data->palette = palette;
+	level_data->rooms = rooms;
+	level_data->entities = entities;
+	level_data->types = types;
+	level_data->floor_data = floor_data;
+	level_data->sound_map = sound_map;
+	level_data->sound_infos = sound_infos;
+	level_data->sound_buffer = sound_buffer;
+	level_data->sound_indices = sound_indices;
 
 	return level_data;
 }
