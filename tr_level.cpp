@@ -503,6 +503,7 @@ Vector<PackedByteArray> read_tr_texture_pages(Ref<TRFileAccess> p_file, TRLevelF
 	Vector<PackedByteArray> textures_8 = read_tr_texture_pages_8(p_file, texture_page_count);
 	if (p_level_format == TR2_PC || p_level_format == TR3_PC) {
 		Vector<PackedByteArray> textures_16 = read_tr_texture_pages_16(p_file, texture_page_count);
+		return textures_16;
 	}
 
 	return textures_8;
@@ -1377,11 +1378,9 @@ Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
 	}
 	else if (version == 0x0000002D) {
 		format = TR2_PC;
-	}
-	else if (version == 0xFF080038 || version == 0xFF180038) {
+	} else if (version == 0xFF080038 || version == 0xFF180038) {
 		format = TR3_PC;
-	}
-	else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
+	} else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
 		format = TR4_PC;
 	}
 
@@ -1449,10 +1448,12 @@ Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
 		if (format == TR2_PC || format == TR3_PC) {
 			palette = read_tr_palette(file);
 			palette32 = read_tr_palette_32(file);
+			texture_type = TR_TEXTURE_TYPE_16;
+		} else {
+			texture_type = TR_TEXTURE_TYPE_8_PAL;
 		}
 
 		Vector<PackedByteArray> textures = read_tr_texture_pages(file, format);
-		texture_type = TR_TEXTURE_TYPE_8_PAL;
 		level_textures = textures;
 		entity_textures = textures;
 	}

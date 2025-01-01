@@ -1495,11 +1495,6 @@ Ref<ArrayMesh> tr_mesh_to_godot_mesh(const TRMesh& p_mesh_data, const Vector<Ref
 		TRUV uv;
 	};
 
-	struct VertexAndID {
-		int32_t vertex_idx;
-		uint8_t id;
-	};
-
 	int32_t last_material_id = 0;
 
 	// Colors
@@ -2275,6 +2270,20 @@ Node3D *generate_godot_scene(
 					}
 				}
 			}
+		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_16) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint16_t);
+					uint16_t pixel = current_texture.get(index + 0) | (uint16_t)current_texture.get(index + 1) << 8;
+
+					image->set_pixel(x, y, Color(
+						((float)((pixel & 0x7c00) >> 10) / 31.0f),
+						((float)((pixel & 0x03e0) >> 5) / 31.0f),
+						((float)((pixel & 0x001f)) / 31.0f),
+						((float)((pixel & 0x8000) >> 15) / 1.0f)
+					));
+				}
+			}
 		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_32) {
 			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
 				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
@@ -2313,6 +2322,20 @@ Node3D *generate_godot_scene(
 						TRColor3 color = p_level_data->palette.get(index);
 						image->set_pixel(x, y, Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f));
 					}
+				}
+			}
+		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_16) {
+			for (int32_t x = 0; x < TR_TEXTILE_SIZE; x++) {
+				for (int32_t y = 0; y < TR_TEXTILE_SIZE; y++) {
+					uint32_t index = ((y * TR_TEXTILE_SIZE) + x) * sizeof(uint16_t);
+					uint16_t pixel = current_texture.get(index + 0) | (uint16_t) current_texture.get(index + 1) << 8;
+
+					image->set_pixel(x, y, Color(
+						((float)((pixel & 0x7c00) >> 10) / 31.0f),
+						((float)((pixel & 0x03e0) >> 5) / 31.0f),
+						((float)((pixel & 0x001f)) / 31.0f),
+						((float)((pixel & 0x8000) >> 15) / 1.0f)
+					));
 				}
 			}
 		} else if (p_level_data->texture_type == TR_TEXTURE_TYPE_32) {
