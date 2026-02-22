@@ -1,8 +1,9 @@
+#pragma once
 #include "tr_module_extension_abstraction_layer.hpp"
 
 #ifdef IS_MODULE
 #include "modules/register_module_types.h"
-#include "core/object/class_db.h"
+#include <core/object/class_db.h>
 #else 
 using namespace godot;
 #include <godot/gdnative_interface.h>

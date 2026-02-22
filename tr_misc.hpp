@@ -8,31 +8,20 @@ struct DummyBoneInfo {
 	Quaternion rotation;
 };
 
-static bool is_lara_compatible_humanoid(uint32_t p_type_info_id, TRLevelFormat p_level_format) {
-	switch (p_level_format) {
-	case TR1_PC:
-		if ((p_type_info_id >= 0 && p_type_info_id <= 6))
-			return true;
-		break;
-	case TR2_PC:
-		if (p_type_info_id == 0 || p_type_info_id == 1 || (p_type_info_id >= 3 && p_type_info_id <= 12)) {
-			return true;
-		}
-		break;
-	case TR3_PC:
-		if (p_type_info_id == 0 || p_type_info_id == 1 || (p_type_info_id >= 3 && p_type_info_id <= 13) || p_type_info_id == 315) {
-			return true;
-		}
-		break;
-	case TR4_PC:
-		if ((p_type_info_id >= 0 && p_type_info_id <= 29) || p_type_info_id == 33) {
-			return true;
-		}
-		break;
-	}
+#define ROOM_LAYERS_TESTING
 
-	return false;
+static int32_t get_room_layer(uint32_t room_number) {
+#ifdef ROOM_LAYERS_TESTING
+	// TR1 Gym
+	if (room_number == 0 || room_number == 1 || room_number == 2 || room_number == 3 || room_number == 4 || room_number == 5 || room_number == 6 || room_number == 15 || room_number == 16 || room_number == 17 || room_number == 18) {
+		return room_number + 1;
+	}
+#endif
+	return 0;
 }
+
+
+extern bool is_lara_compatible_humanoid(uint32_t p_type_info_id, TRLevelFormat p_level_format);
 
 static bool does_type_use_motion_scale(uint32_t p_type_info_id, TRLevelFormat p_level_format) {
 	if (is_lara_compatible_humanoid(p_type_info_id, p_level_format)) {

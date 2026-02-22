@@ -346,10 +346,10 @@ static String get_tr2_bone_name(uint32_t p_type_info_id, uint32_t p_bone_id) {
 	return String("bone_") + itos(p_bone_id);
 }
 
-static String get_tr2_animation_name(size_t p_type_info_id, size_t p_animation_id) {
+static String get_tr2_animation_name(size_t p_type_info_id, size_t p_animation_id, bool p_using_auxiliary_animation) {
 	switch (p_type_info_id) {
 		case 0: {
-			return get_lara_animation_name(p_animation_id, TR2_PC);
+			return get_lara_animation_name(p_animation_id, TR2_PC, p_using_auxiliary_animation);
 		} break;
 	}
 	return String("animation_") + itos(p_animation_id);

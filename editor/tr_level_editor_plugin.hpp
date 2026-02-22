@@ -6,10 +6,12 @@
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
 #include "editor/editor_undo_redo_manager.h"
-#include "editor/plugins/node_3d_editor_plugin.h"
+#include "editor/scene/3d/node_3d_editor_plugin.h"
 #include "scene/gui/button.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/check_box.h"
+
+#ifdef TR_LIB_EXTERNAL_PLUGIN
 
 class TRLevelEditorPlugin : public EditorPlugin {
 	GDCLASS(TRLevelEditorPlugin, EditorPlugin);
@@ -87,5 +89,7 @@ public:
 	}
 
 };
+
+#endif // TR_LIB_EXTERNAL_PLUGIN
 
 #endif // TR_LEVEL_EDITOR_PLUGIN_H

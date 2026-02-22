@@ -1,15 +1,13 @@
 #include "tr_level.hpp"
 
 #include <core/io/stream_peer_gzip.h>
-#include "core/math/math_funcs.h"
-#include <editor/editor_file_system.h> 
+#include <core/math/math_funcs.h>
+#include <editor/file_system/editor_file_system.h>
+
 #include "tr_level_data.hpp"
 #include "tr_godot_conversion.hpp"
 #include "tr_file_parser.hpp"
-
-#ifdef IS_MODULE
-using namespace godot;
-#endif
+#include "tr_hd_assets.hpp"
 
 // TR to Godot directional mappings:
 // Z+ = North
@@ -258,7 +256,10 @@ TRRoomLight read_tr_light(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format
 	room_light.pos = read_tr_pos(p_file);
 
 	if (p_level_format == TR3_PC || p_level_format == TR4_PC) {
-		room_light.color = read_tr_color3(p_file);
+		TRColor3 color = read_tr_color3(p_file);
+		room_light.color = Color(((float)color.r / 255.0f), ((float)color.g / 255.0f), ((float)color.b / 255.0f), 1.0f);
+	} else {
+		room_light.color = Color(1.0, 1.0, 1.0, 1.0);
 	}
 
 	if (p_level_format == TR3_PC || p_level_format == TR4_PC) {
@@ -267,8 +268,8 @@ TRRoomLight read_tr_light(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format
 
 		if (p_level_format == TR3_PC) {
 			if (room_light.light_type == 1) {
-				room_light.intensity_alt = room_light.intensity = p_file->get_u32();
-				room_light.fade_alt = room_light.fade = p_file->get_u32();
+				uint32_t intensity = p_file->get_u32();
+				uint32_t fade = p_file->get_u32();
 			} else {
 				uint16_t nx = p_file->get_u16();
 				uint16_t ny = p_file->get_u16();
@@ -291,20 +292,22 @@ TRRoomLight read_tr_light(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format
 
 	} else if (p_level_format == TR1_PC || p_level_format == TR2_PC) {
 		// Intensity
-		room_light.intensity = p_file->get_u16();
+		uint16_t intensity = p_file->get_u16();
 
 		if (p_level_format == TR2_PC) {
-			room_light.intensity_alt = p_file->get_u16();
-		} else {
-			room_light.intensity_alt = room_light.intensity;
-		}
+			uint16_t intensity_alt = p_file->get_u16();
+		};
+
+		room_light.energy = (real_t(intensity) / real_t(0x1fff)) * 2.0;
+
 		// Fade
-		room_light.fade = p_file->get_u32();
+		uint32_t fade = p_file->get_u32();
 		if (p_level_format == TR2_PC) {
-			room_light.fade_alt = p_file->get_u32();
-		} else {
-			room_light.fade_alt = room_light.fade;
+			uint32_t fade_alt = p_file->get_u32();
 		}
+
+		room_light.range = (real_t(fade) * TR_TO_GODOT_SCALE * 2.0);
+		room_light.attenuation = 0.5;
 	}
 
 	return room_light;
@@ -341,20 +344,30 @@ TRRoomPortal read_tr_room_portal(Ref<TRFileAccess> p_file) {
 	room_portal.adjoining_room = p_file->get_u16();
 	room_portal.normal = read_tr_vertex(p_file);
 	for (int32_t i = 0; i < 4; i++) {
-		room_portal.vertices[i] = read_tr_vertex(p_file);
+		TRVertex room_portal_vertex = read_tr_vertex(p_file);;
+		room_portal.vertices[i].x = room_portal_vertex.x;
+		room_portal.vertices[i].y = room_portal_vertex.y;
+		room_portal.vertices[i].z = room_portal_vertex.z;
 	}
 
 	return room_portal;
 }
 
-TRRoomInfo read_tr_room_info(Ref<TRFileAccess> p_file) {
+TRRoomInfo read_tr_room_info(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRRoomInfo room_info;
 
 	room_info.x = p_file->get_s32();
+	if (p_level_format == TR5_PC) {
+		room_info.y = p_file->get_s32();
+	}
 	room_info.z = p_file->get_s32();
 
 	room_info.y_bottom = p_file->get_s32();
 	room_info.y_top = p_file->get_s32();
+
+	if (p_level_format != TR5_PC) {
+		room_info.y = room_info.y_bottom;
+	}
 
 	return room_info;
 }
@@ -362,9 +375,32 @@ TRRoomInfo read_tr_room_info(Ref<TRFileAccess> p_file) {
 TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	TRRoom room;
 
+	if (p_level_format == TR5_PC) {
+		uint8_t xela_landmark[4];
+		for (int32_t i = 0; i < 4; i++) {
+			xela_landmark[i] = p_file->get_u8();
+		}
+		uint32_t room_data_size = p_file->get_u32();
+
+		uint8_t sep1[4];
+		for (int32_t i = 0; i < 4; i++) {
+			sep1[i] = p_file->get_u8();
+		}
+
+		uint32_t end_sd_offset = p_file->get_u32();
+		uint32_t start_sd_offset = p_file->get_u32();
+
+		uint8_t sep2[4];
+		for (int32_t i = 0; i < 4; i++) {
+			sep2[i] = p_file->get_u8();
+		}
+
+		uint32_t end_portal_offset = p_file->get_u32();
+	}
+
 	uint32_t rt_position = p_file->get_position();
 
-	room.info = read_tr_room_info(p_file);
+	room.info = read_tr_room_info(p_file, p_level_format);
 
 	uint32_t rt_position2 = p_file->get_position();
 
@@ -388,12 +424,14 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	room.sector_count_z = p_file->get_u16();
 
 	uint32_t floor_sectors_total = room.sector_count_x * room.sector_count_z;
-	room.sectors.resize(floor_sectors_total);
-	for (uint32_t i = 0; i < floor_sectors_total; i++) {
-		room.sectors.set(i, read_tr_room_sector(p_file));
+	if (p_level_format != TR5_PC) {
+		room.sectors.resize(floor_sectors_total);
+		for (uint32_t i = 0; i < floor_sectors_total; i++) {
+			room.sectors.set(i, read_tr_room_sector(p_file));
+		}
 	}
 
-	if (p_level_format == TR4_PC) {
+	if (p_level_format == TR4_PC || p_level_format == TR5_PC) {
 		TRColor4 room_color = read_tr_color4_argb(p_file);
 		room.ambient_light.set_r8(room_color.r);
 		room.ambient_light.set_g8(room_color.g);
@@ -418,19 +456,29 @@ TRRoom read_tr_room(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	}
 
 	room.light_count = p_file->get_u16();
-	room.lights.resize(room.light_count);
-	for (int32_t i = 0; i < room.light_count; i++) {
-		room.lights.set(i, read_tr_light(p_file, p_level_format));
+	if (p_level_format != TR5_PC) {
+		room.lights.resize(room.light_count);
+		for (int32_t i = 0; i < room.light_count; i++) {
+			room.lights.set(i, read_tr_light(p_file, p_level_format));
+		}
 	}
 
 	room.room_static_mesh_count = p_file->get_u16();
-	room.room_static_meshes.resize(room.room_static_mesh_count);
-	for (int32_t i = 0; i < room.room_static_mesh_count; i++) {
-		room.room_static_meshes.set(i, read_tr_room_static_mesh(p_file, p_level_format));
+	if (p_level_format != TR5_PC) {
+		room.room_static_meshes.resize(room.room_static_mesh_count);
+		for (int32_t i = 0; i < room.room_static_mesh_count; i++) {
+			room.room_static_meshes.set(i, read_tr_room_static_mesh(p_file, p_level_format));
+		}
 	}
 
 	room.alternative_room = p_file->get_s16();
 	room.room_flags = p_file->get_u16();
+
+	if (p_level_format == TR5_PC) {
+		uint32_t unknown_1 = p_file->get_u32();
+		uint32_t unknown_2 = p_file->get_u32();
+		uint32_t unknown_3 = p_file->get_u32();
+	}
 
 	// If the room is underwater, change the color
 	if (p_level_format == TR1_PC || p_level_format == TR2_PC) {
@@ -707,64 +755,48 @@ Vector<TRTextureInfo> read_tr_texture_infos(Ref<TRFileAccess> p_file, TRLevelFor
 	return texture_infos;
 }
 
-TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
-	TRTypes tr_types;
+bool read_tr_types_animation_data(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format, TRTypes *p_types) {
+	ERR_FAIL_COND_V(!p_types, false);
 
-	// Mesh Buffer
-	int32_t mesh_data_buffer_size = p_file->get_s32();
-	// Save position of the start of mesh buffer
-	int32_t mesh_buffer_pos = p_file->get_position();
-	// Skip the buffer
-	p_file->seek(p_file->get_position() + mesh_data_buffer_size * sizeof(uint16_t));
+	p_types->animations.clear();
+	p_types->animation_state_changes.clear();
+	p_types->animation_dispatches.clear();
+	p_types->animation_commands.clear();
+	p_types->mesh_tree_buffer.clear();
 
-	// Mesh Pointers
-	int32_t mesh_ptr_count = p_file->get_s32();
-	PackedInt32Array mesh_ptr_buffer = p_file->get_buffer_int32(mesh_ptr_count);
-
-	// Save position of the end of the mesh pointer buffer
-	int32_t mesh_ptr_buffer_end = p_file->get_position();
-
-	for (int32_t i = 0; i < mesh_ptr_count; i++) {
-		int32_t ptr = mesh_ptr_buffer[i];
-		p_file->seek(mesh_buffer_pos + ptr);
-
-		TRMesh mesh = read_tr_mesh(p_file, p_level_format);
-		tr_types.meshes.push_back(mesh);
-	}
-
-	p_file->seek(mesh_ptr_buffer_end);
+	p_types->moveable_info_map.clear();
 
 	// Animations
-	int32_t anim_count = p_file->get_s32();
-	for (int32_t i = 0; i < anim_count; i++) {
+	int32_t animation_count = p_file->get_s32();
+	for (int32_t i = 0; i < animation_count; i++) {
 		TRAnimation animation = read_tr_animation(p_file, p_level_format);
-		tr_types.animations.push_back(animation);
+		p_types->animations.push_back(animation);
 	}
 
 	// Animation State Changes
 	int32_t animation_change_count = p_file->get_s32();
 	for (int32_t i = 0; i < animation_change_count; i++) {
 		TRAnimationStateChange state_change = read_tr_animation_state_change(p_file, p_level_format);
-		tr_types.animation_state_changes.push_back(state_change);
+		p_types->animation_state_changes.push_back(state_change);
 	}
 
 	// Animation Dispatches
 	int32_t animation_dispatch_count = p_file->get_s32();
 	for (int32_t i = 0; i < animation_dispatch_count; i++) {
 		TRAnimationDispatch dispatch = read_tr_animation_dispatch(p_file, p_level_format);
-		tr_types.animation_dispatches.push_back(dispatch);
+		p_types->animation_dispatches.push_back(dispatch);
 	}
 
 	// Animation Commands
 	int32_t anim_command_count = p_file->get_s32();
 	for (int32_t i = 0; i < anim_command_count; i++) {
 		TRAnimationCommand command = read_tr_animation_command(p_file, p_level_format);
-		tr_types.animation_commands.push_back(command);
+		p_types->animation_commands.push_back(command);
 	}
 
 	// Mesh Tree Count
 	int32_t mesh_tree_count = p_file->get_s32();
-	tr_types.mesh_tree_buffer = p_file->get_buffer_int32(mesh_tree_count);
+	p_types->mesh_tree_buffer = p_file->get_buffer_int32(mesh_tree_count);
 
 	// Animation Frame Count
 	int32_t anim_frame_count = p_file->get_s32();
@@ -792,33 +824,41 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 		}
 	}
 
-	// Calculate animation count (should work fine in retail games, but may not work for custom levels)
-	for (int32_t i = 0; i < moveable_infos.size() - 1; i++) {
+	// Calculate animation count.
+	for (int32_t i = 0; i < moveable_infos.size(); i++) {
 		TRMoveableInfo moveable_info = moveable_infos[i];
 
 		if (moveable_infos[i].animation_index >= 0) {
-			if (moveable_infos[i + 1].animation_index > moveable_infos[i].animation_index) {
-				moveable_info.animation_count = moveable_infos[i + 1].animation_index - moveable_infos[i].animation_index;
+			if (i < moveable_infos.size() - 1) {
+				if (moveable_infos[i + 1].animation_index > moveable_infos[i].animation_index) {
+					moveable_info.animation_count = moveable_infos[i + 1].animation_index - moveable_infos[i].animation_index;
+				}
+			}
+			else {
+				int32_t final_object_animation_count = animation_count - moveable_infos[i].animation_index;
+				if (final_object_animation_count >= 0) {
+					moveable_info.animation_count = final_object_animation_count;
+				}
 			}
 		}
 		moveable_infos.set(i, moveable_info);
 	}
 
 	// Animation setup (we're skipping the last model because we don't know the amount of animations it has)
-	for (int32_t i = 0; i < moveable_infos.size() - 1; i++) {
+	for (int32_t i = 0; i < moveable_infos.size(); i++) {
 		TRMoveableInfo moveable_info = moveable_infos[i];
 
 		for (int64_t animation_idx = 0; animation_idx < moveable_info.animation_count; animation_idx++) {
-			if (moveable_info.animation_index + animation_idx >= tr_types.animations.size()) {
+			if (moveable_info.animation_index + animation_idx >= p_types->animations.size()) {
 				continue;
 			}
 
-			TRAnimation animation = tr_types.animations[moveable_info.animation_index + animation_idx];
-			ERR_FAIL_COND_V(animation.frame_skip <= 0, TRTypes());
+			TRAnimation animation = p_types->animations[moveable_info.animation_index + animation_idx];
+			ERR_FAIL_COND_V(animation.frame_skip <= 0, false);
 
 			int32_t frame_count = (animation.frame_end - animation.frame_base) / animation.frame_skip;
 			frame_count++;
-			
+
 			int32_t frame_ptr = animation.frame_offset;
 
 			for (int64_t frame_idx = 0; frame_idx < frame_count; frame_idx++) {
@@ -829,7 +869,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 				}
 
 				TRBoundingBox bounding_box;
-				
+
 				int16_t* bounds[] = { &bounding_box.x_min, &bounding_box.x_max, &bounding_box.y_min, &bounding_box.y_max, &bounding_box.z_min, &bounding_box.z_max };
 				for (int32_t j = 0; j < sizeof(bounds) / sizeof(bounds[0]); j++) {
 					if (frame_ptr + 2 >= anim_frame_buffer.size()) {
@@ -891,7 +931,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 						uint16_t rot_16_b = (rot_3) | ((uint16_t)(rot_4) << 8);
 
 						uint32_t rot_32;
-						if (p_level_format == TR2_PC || p_level_format == TR3_PC || p_level_format == TR4_PC) {
+						if (p_level_format == TR2_PC || p_level_format == TR3_PC || p_level_format == TR4_PC || p_level_format == TR5_PC) {
 							rot_32 = rot_16_b | ((uint32_t)(rot_16_a) << 16);
 						} else {
 							rot_32 = rot_16_a | ((uint32_t)(rot_16_b) << 16);
@@ -904,36 +944,37 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 						rot.z = (tr_angle)((((rot_32) & 0x3ff) << 6));
 
 						bone_transform.rot = rot;
-					} else {
+					}
+					else {
 						TRRot rot;
 
 						rot.y = 0;
 						rot.x = 0;
 						rot.z = 0;
 
-						if (p_level_format == TR4_PC) {
+						if (p_level_format == TR4_PC || p_level_format == TR5_PC) {
 							switch (flags) {
-								case 1:
-									rot.x = (rot_16_a & 0xfff) << 4;
-									break;
-								case 2:
-									rot.y = (rot_16_a & 0xfff) << 4;
-									break;
-								case 3:
-									rot.z = (rot_16_a & 0xfff) << 4;
-									break;
+							case 1:
+								rot.x = (rot_16_a & 0xfff) << 4;
+								break;
+							case 2:
+								rot.y = (rot_16_a & 0xfff) << 4;
+								break;
+							case 3:
+								rot.z = (rot_16_a & 0xfff) << 4;
+								break;
 							}
 						} else {
 							switch (flags) {
-								case 1:
-									rot.x = (rot_16_a & 0x3ff) << 6;
-									break;
-								case 2:
-									rot.y = (rot_16_a & 0x3ff) << 6;
-									break;
-								case 3:
-									rot.z = (rot_16_a & 0x3ff) << 6;
-									break;
+							case 1:
+								rot.x = (rot_16_a & 0x3ff) << 6;
+								break;
+							case 2:
+								rot.y = (rot_16_a & 0x3ff) << 6;
+								break;
+							case 3:
+								rot.z = (rot_16_a & 0x3ff) << 6;
+								break;
 							}
 						}
 
@@ -949,7 +990,7 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 
 				animation.frames.push_back(anim_frame);
 			}
-			tr_types.animations.set(moveable_info.animation_index + animation_idx, animation);
+			p_types->animations.set(moveable_info.animation_index + animation_idx, animation);
 
 			moveable_info.animations.push_back(animation);
 		}
@@ -957,31 +998,64 @@ TRTypes read_tr_types(Ref<TRFileAccess> p_file, TRLevelFormat p_level_format) {
 	}
 
 	for (int64_t i = 0; i < id_list.size(); i++) {
-		tr_types.moveable_info_map[id_list[i]] = moveable_infos[i];
+		p_types->moveable_info_map[id_list[i]] = moveable_infos[i];
+	}
+
+	return true;
+}
+
+TRTypes read_tr_types(Ref<TRFileAccess> p_level_file, Ref<TRFileAccess> p_auxiliary_animation_file, TRLevelFormat p_level_format) {
+	TRTypes tr_types;
+
+	// Mesh Buffer
+	int32_t mesh_data_buffer_size = p_level_file->get_s32();
+	// Save position of the start of mesh buffer
+	int32_t mesh_buffer_pos = p_level_file->get_position();
+	// Skip the buffer
+	p_level_file->seek(p_level_file->get_position() + mesh_data_buffer_size * sizeof(uint16_t));
+
+	// Mesh Pointers
+	int32_t mesh_ptr_count = p_level_file->get_s32();
+	PackedInt32Array mesh_ptr_buffer = p_level_file->get_buffer_int32(mesh_ptr_count);
+
+	// Save position of the end of the mesh pointer buffer
+	int32_t mesh_ptr_buffer_end = p_level_file->get_position();
+
+	for (int32_t i = 0; i < mesh_ptr_count; i++) {
+		int32_t ptr = mesh_ptr_buffer[i];
+		p_level_file->seek(mesh_buffer_pos + ptr);
+
+		TRMesh mesh = read_tr_mesh(p_level_file, p_level_format);
+		tr_types.meshes.push_back(mesh);
+	}
+
+	p_level_file->seek(mesh_ptr_buffer_end);
+
+	ERR_FAIL_COND_V(!read_tr_types_animation_data(p_level_file, p_level_format, &tr_types), TRTypes());
+	
+	// PDP file detected!
+	if (p_auxiliary_animation_file.is_valid()) {
+		ERR_FAIL_COND_V(!read_tr_types_animation_data(p_auxiliary_animation_file, p_level_format, &tr_types), TRTypes());
 	}
 
 	// TODO: Setup types
 
 	// Statics Count
 	HashMap<int32_t, TRStaticInfo > static_map;
-	int32_t static_count = p_file->get_s32();
+	int32_t static_count = p_level_file->get_s32();
 	for (int64_t i = 0; i < static_count; i++) {
-		int32_t static_id = p_file->get_u32();
+		int32_t static_id = p_level_file->get_u32();
 		
 		TRStaticInfo static_info;
 
-		static_info.mesh_number = p_file->get_u16();
+		static_info.mesh_number = p_level_file->get_u16();
 
-		static_info.visibility_box = read_tr_bounding_box(p_file);
-		static_info.collision_box = read_tr_bounding_box(p_file);
+		static_info.visibility_box = read_tr_bounding_box(p_level_file);
+		static_info.collision_box = read_tr_bounding_box(p_level_file);
 
-		static_info.flags = p_file->get_u16();
+		static_info.flags = p_level_file->get_u16();
 
 		tr_types.static_info_map[static_id] = static_info;
-	}
-
-	if (p_level_format != TR3_PC && p_level_format != TR4_PC) {
-		tr_types.texture_infos = read_tr_texture_infos(p_file, p_level_format);
 	}
 
 	return tr_types;
@@ -1342,242 +1416,200 @@ void TRLevel::clear_level() {
 }
 
 void TRLevel::load_level(bool p_lara_only) {
-	Ref<TRLevelData> level_data = load_level_type(level_path);
+	Ref<TRLevelData> level_data = load_level_type();
+	if (level_data.is_valid()) {
+		Node3D* rooms_node = generate_godot_scene(
+			this,
+			level_data,
+			p_lara_only);
 
-	Node3D *rooms_node = generate_godot_scene(
-		this, 
-		level_data,
-		p_lara_only);
+		String hd_file_path = level_path.get_basename() + ".TRG";
+		//load_hd_level(hd_file_path);
+	}
 }
 
-Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
+Ref<TRLevelData> TRLevel::load_level_data(
+	Ref<TRFileAccess> level_file,
+	Ref<TRLevelData> level_data,
+	TRLevelFormat format,
+	Ref<TRFileAccess> auxiliary_animation_file) {
+
 	Vector<TRColor3> palette;
-	Vector<TRColor4> palette32;
-	TRTextureType texture_type = TR_TEXTURE_TYPE_8_PAL;
-	Vector<PackedByteArray> entity_textures;
-	Vector<PackedByteArray> level_textures;
-	PackedByteArray other_decompressed_buffer;
 
-	Error error;
-	Ref<TRLevelData> level_data;
-	level_data.instantiate();
-
-	ERR_FAIL_COND_V(level_data.is_null(), nullptr);
-
-	level_data->format = TR_VERSION_UNKNOWN;
-
-	Ref<TRFileAccess> file = TRFileAccess::open(level_path, &error);
-	if (error != Error::OK) {
-		return level_data;
-	}
-
-	TRLevelFormat format = TR1_PC;
-	int32_t version = file->get_s32();
-	if (version == 0x00000020) {
-		format = TR1_PC;
-	}
-	else if (version == 0x0000002D) {
-		format = TR2_PC;
-	} else if (version == 0xFF080038 || version == 0xFF180038) {
-		format = TR3_PC;
-	} else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
-		format = TR4_PC;
-	}
-
-	ERR_FAIL_COND_V(format == TR_VERSION_UNKNOWN, level_data);
-
-	if (format == TR4_PC) {
-		uint16_t num_room_textiles = file->get_u16();
-		uint16_t num_obj_textiles = file->get_u16();
-		uint16_t num_bump_textiles = file->get_u16();
-
-		uint32_t total_textiles = num_room_textiles + num_obj_textiles + num_bump_textiles;
-
-		// 32-Bit
-		uint32_t textiles32_decompressed_size = file->get_u32();
-		uint32_t textiles32_compressed_size = file->get_u32();
-
-		PackedByteArray textiles32_compressed_buffer = file->get_buffer(textiles32_compressed_size);
-		PackedByteArray textiles32_decompressed_buffer;
-		textiles32_decompressed_buffer.resize(textiles32_decompressed_size);
-
-		Compression compression_32;
-		compression_32.decompress(textiles32_decompressed_buffer.ptrw(), textiles32_decompressed_size, textiles32_compressed_buffer.ptr(), textiles32_compressed_size, Compression::MODE_DEFLATE);
-
-		// 16-Bit
-		uint32_t textiles16_decompressed_size = file->get_u32();
-		uint32_t textiles16_compressed_size = file->get_u32();
-
-		PackedByteArray textiles16_compressed_buffer = file->get_buffer(textiles16_compressed_size);
-		PackedByteArray textiles16_decompressed_buffer;
-		textiles16_decompressed_buffer.resize(textiles16_decompressed_size);
-
-		Compression compression_16;
-		compression_16.decompress(textiles16_decompressed_buffer.ptrw(), textiles16_decompressed_size, textiles16_compressed_buffer.ptr(), textiles16_compressed_size, Compression::MODE_DEFLATE);
-
-
-		Ref<TRFileAccess> uncompressed_file_access = TRFileAccess::create_from_buffer(textiles32_decompressed_buffer);
-		level_textures = read_tr_texture_pages_32(uncompressed_file_access, num_room_textiles);
-		entity_textures = read_tr_texture_pages_32(uncompressed_file_access, num_obj_textiles);
-		Vector<PackedByteArray> bump_textures_32 = read_tr_texture_pages_32(uncompressed_file_access, num_bump_textiles);
-		texture_type = TR_TEXTURE_TYPE_32;
-
-		// Font and Sky
-		uint32_t font_and_sky_decompressed_size = file->get_u32();
-		uint32_t font_and_sky_compressed_size = file->get_u32();
-
-		PackedByteArray font_and_sky_compressed_buffer = file->get_buffer(font_and_sky_compressed_size);
-		PackedByteArray font_and_sky_decompressed_buffer;
-		font_and_sky_decompressed_buffer.resize(font_and_sky_decompressed_size);
-
-		Compression font_and_sky_compression;
-		font_and_sky_compression.decompress(font_and_sky_decompressed_buffer.ptrw(), font_and_sky_decompressed_size, font_and_sky_compressed_buffer.ptr(), font_and_sky_compressed_size, Compression::MODE_DEFLATE);
-
-		// Other
-		uint32_t other_decompressed_size = file->get_u32();
-		uint32_t other_compressed_size = file->get_u32();
-
-		PackedByteArray other_compressed_buffer = file->get_buffer(other_compressed_size);
-		other_decompressed_buffer.resize(other_decompressed_size);
-
-		Compression other_compression;
-		other_compression.decompress(other_decompressed_buffer.ptrw(), other_decompressed_size, other_compressed_buffer.ptr(), other_compressed_size, Compression::MODE_DEFLATE);
-
-		file = TRFileAccess::create_from_buffer(other_decompressed_buffer);
-	} else {
-		if (format == TR2_PC || format == TR3_PC) {
-			palette = read_tr_palette(file);
-			palette32 = read_tr_palette_32(file);
-			texture_type = TR_TEXTURE_TYPE_16;
+	if (format == TR1_PC || format == TR2_PC || format == TR3_PC) {
+		if (format == TR1_PC) {
+			level_data->texture_type = TR_TEXTURE_TYPE_8_PAL;
 		} else {
-			texture_type = TR_TEXTURE_TYPE_8_PAL;
+			palette = read_tr_palette(level_file);
+			Vector<TRColor4> palette32 = read_tr_palette_32(level_file);
+			level_data->texture_type = TR_TEXTURE_TYPE_16;
 		}
 
-		Vector<PackedByteArray> textures = read_tr_texture_pages(file, format);
-		level_textures = textures;
-		entity_textures = textures;
+		Vector<PackedByteArray> textures = read_tr_texture_pages(level_file, format);
+		level_data->level_textures = textures;
+		level_data->entity_textures = textures;
 	}
 
-	int32_t file_level_num = file->get_s32();
+	int32_t file_level_num = level_file->get_s32();
 
-	Vector<TRRoom> rooms = read_tr_rooms(file, format);
+	Vector<TRRoom> rooms = read_tr_rooms(level_file, format);
 
-	PackedByteArray floor_data = read_tr_floor_data(file);
+	PackedByteArray floor_data = read_tr_floor_data(level_file);
 
-	TRTypes types = read_tr_types(file, format);
+	TRTypes types = read_tr_types(level_file, auxiliary_animation_file, format);
+
+	if (format == TR1_PC || format == TR2_PC) {
+		types.texture_infos = read_tr_texture_infos(level_file, format);
+	}
 
 	if (format == TR4_PC) {
-		PackedByteArray spr_ident = file->get_buffer(3);
+		PackedByteArray spr_ident = level_file->get_buffer(3);
 	}
-	read_tr_sprites(file);
 
-	read_tr_cameras(file);
+	read_tr_sprites(level_file);
 
-	read_tr_flyby_cameras(file, format);
+	read_tr_cameras(level_file);
 
-	read_tr_sound_effects(file);
+	read_tr_flyby_cameras(level_file, format);
 
-	read_tr_nav_cells(file, format);
+	read_tr_sound_effects(level_file);
 
-	read_tr_animated_textures(file, format);
+	read_tr_nav_cells(level_file, format);
+
+	read_tr_animated_textures(level_file, format);
 
 	if (format == TR3_PC || format == TR4_PC) {
 		if (format == TR4_PC) {
-			PackedByteArray tex_ident = file->get_buffer(3);
+			PackedByteArray tex_ident = level_file->get_buffer(3);
 		}
-		types.texture_infos = read_tr_texture_infos(file, format);
+		types.texture_infos = read_tr_texture_infos(level_file, format);
 	}
 
-	Vector<TREntity> entities = read_tr_entities(file, format);
+	Vector<TREntity> entities = read_tr_entities(level_file, format);
 
 	if (format == TR4_PC) {
-		read_tr_ai_objects(file, format);
+		read_tr_ai_objects(level_file, format);
 	}
 
 	if (format == TR1_PC || format == TR2_PC || format == TR3_PC) {
-		read_tr_lightmap(file);
+		read_tr_lightmap(level_file);
 	}
 
 	if (format == TR1_PC) {
-		palette = read_tr_palette(file);
+		palette = read_tr_palette(level_file);
 	}
 
 	if (format == TR1_PC || format == TR2_PC || format == TR3_PC) {
-		read_tr_camera_frames(file);
+		read_tr_camera_frames(level_file);
 	}
 
-	read_tr_demo_frames(file);
+	read_tr_demo_frames(level_file);
 
 
-	Vector<uint16_t> sound_map; 
+	Vector<uint16_t> sound_map;
 	if (format != TR4_PC) {
-		sound_map = read_tr_sound_map(file, format);
+		sound_map = read_tr_sound_map(level_file, format);
 	}
 	types.sound_map = sound_map;
 
 	Vector<TRSoundInfo> sound_infos;
 	if (format != TR4_PC) {
-		sound_infos = read_tr_sound_infos(file, format);
+		sound_infos = read_tr_sound_infos(level_file, format);
 	}
 
 	PackedByteArray sound_buffer;
 
 	if (format == TR1_PC) {
-		sound_buffer = read_tr_sound_buffer(file);
+		sound_buffer = read_tr_sound_buffer(level_file);
 	}
 
 	PackedInt32Array sound_indices;
 	if (format != TR4_PC) {
-		sound_indices = read_tr_sound_indices(file);
+		sound_indices = read_tr_sound_indices(level_file);
 	}
 
-	if (format == TR2_PC || format == TR3_PC) {
-		Error sfx_error;
-		String directory_path = level_path.get_base_dir();
-		Ref<TRFileAccess> sfx_file;
-		sfx_file = TRFileAccess::open(directory_path + "/MAIN.SFX", &sfx_error);
+	Error sfx_error;
+	String directory_path = level_path.get_base_dir();
+	Ref<TRFileAccess> sfx_file;
+	sfx_file = TRFileAccess::open(directory_path + "/MAIN.SFX", &sfx_error);
 
+	if (sfx_file.is_valid()) {
 		sound_buffer = sfx_file->get_buffer(sfx_file->get_size());
 		sfx_file->seek(0);
 
-		Vector<int32_t> wave_table;
-		// TODO: handle Remaster
-		for (int32_t i = 0; i < 370; i++) {
-			if (sfx_file->get_fixed_string(4) == "RIFF") {
-				wave_table.append(sfx_file->get_position() - 4);
-				uint32_t file_size = sfx_file->get_u32();
-				if (file_size > 0) {
-					if (sfx_file->get_fixed_string(4) == "WAVE") {
-						if (sfx_file->get_fixed_string(4) == "fmt ") {
-							uint32_t length = sfx_file->get_u32();
-							uint16_t format_type = sfx_file->get_u16();
-							uint16_t channels = sfx_file->get_u16();
-							uint32_t mix_rate = sfx_file->get_u32();
-							uint32_t byte_per_second = sfx_file->get_u32();
-							uint16_t byte_per_block = sfx_file->get_u16();
-							uint16_t bits_per_sample = sfx_file->get_u16();
+		int32_t sfx_amount = (format == TR1_PC) ? 256 : 370;
 
-							if (sfx_file->get_fixed_string(4) == "data") {
-								uint32_t buffer_size = sfx_file->get_u32();
-								sfx_file->seek(sfx_file->get_position() + buffer_size);
+		Vector<int32_t> id_table;
+		id_table.resize(sfx_amount);
+
+		Vector<int32_t> wave_table;
+		wave_table.resize(sfx_amount);
+		for (int32_t i = 0; i < sfx_amount; i++) {
+			wave_table.set(i, -1);
+		}
+
+		bool is_remaster_sfx_file = sfx_file->get_fixed_string(4) != "RIFF";
+		sfx_file->seek(0);
+
+		size_t header_size = 0;
+		if (is_remaster_sfx_file) {
+			for (int32_t i = 0; i < sfx_amount; i++) {
+				int16_t id = sfx_file->get_u16();
+				id_table.set(i, id);
+			}
+		}
+		else {
+			for (int32_t i = 0; i < sfx_amount; i++) {
+				id_table.set(i, i);
+			}
+		}
+
+		for (int32_t i = 0; i < sfx_amount; i++) {
+			if (sfx_file->get_fixed_string(4) == "RIFF") {
+				int32_t id = id_table.get(i);
+				int32_t wave_buffer_position = sfx_file->get_position() - 4;
+
+				uint32_t file_size = sfx_file->get_u32();
+				uint32_t end_position = sfx_file->get_position() + file_size;
+
+				if (id < sfx_amount) {
+					wave_table.set(id, wave_buffer_position);
+					if (file_size > 0) {
+						if (sfx_file->get_fixed_string(4) == "WAVE") {
+							if (sfx_file->get_fixed_string(4) == "fmt ") {
+								uint32_t length = sfx_file->get_u32();
+								uint16_t format_type = sfx_file->get_u16();
+								uint16_t channels = sfx_file->get_u16();
+								uint32_t mix_rate = sfx_file->get_u32();
+								uint32_t byte_per_second = sfx_file->get_u32();
+								uint16_t byte_per_block = sfx_file->get_u16();
+								uint16_t bits_per_sample = sfx_file->get_u16();
+
+								if (sfx_file->get_fixed_string(4) == "data") {
+									uint32_t buffer_size = sfx_file->get_u32();
+									sfx_file->seek(sfx_file->get_position() + buffer_size);
+								}
 							}
 						}
 					}
+					sfx_file->seek(end_position);
 				}
 			}
 		}
+
 		for (int32_t i = 0; i < sound_indices.size(); i++) {
 			int32_t index = sound_indices.get(i);
 			if (index < wave_table.size()) {
 				sound_indices.set(i, wave_table.get(index));
-			} else {
+			}
+			else {
 				sound_indices.set(i, -1);
 			}
 		}
 	}
 
 	if (format == TR4_PC) {
-		PackedByteArray _seperator = file->get_buffer(6);
+		PackedByteArray _seperator = level_file->get_buffer(6);
 	}
 
 #if 0
@@ -1586,10 +1618,8 @@ Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
 #endif
 
 	level_data->format = format;
-	level_data->texture_type = texture_type;
-	level_data->level_textures = level_textures;
-	level_data->entity_textures = entity_textures;
 	level_data->palette = palette;
+	level_data->is_using_auxiliary_animation = auxiliary_animation_file.is_valid();
 	level_data->rooms = rooms;
 	level_data->entities = entities;
 	level_data->types = types;
@@ -1598,6 +1628,128 @@ Ref<TRLevelData> TRLevel::load_level_type(String file_path) {
 	level_data->sound_infos = sound_infos;
 	level_data->sound_buffer = sound_buffer;
 	level_data->sound_indices = sound_indices;
+
+	return level_data;
+}
+
+Ref<TRLevelData> TRLevel::load_level_type() {
+	Error error;
+	Ref<TRLevelData> level_data;
+	level_data.instantiate();
+
+	ERR_FAIL_COND_V(level_data.is_null(), nullptr);
+
+	level_data->format = TR1_PC;
+
+	Ref<TRFileAccess> level_file = TRFileAccess::open(level_path, &error);
+	if (error != Error::OK) {
+		return level_data;
+	}
+
+	String PDP_file_path = level_path.get_basename() + ".PDP";
+	Ref<TRFileAccess> auxiliary_animation_file = TRFileAccess::open(PDP_file_path, &error);
+	if (error != Error::OK) {
+		auxiliary_animation_file = nullptr;
+	}
+
+	TRLevelFormat format = TR1_PC;
+	int32_t version = level_file->get_s32();
+	if (version == 0x00000020) {
+		format = TR1_PC;
+	} else if (version == 0x0000002D) {
+		format = TR2_PC;
+	} else if (version == 0xFF080038 || version == 0xFF180038) {
+		format = TR3_PC;
+	} else if (version == 0x00345254 && level_path.get_extension() == "tr4") {
+		format = TR4_PC;
+	} else if (version == 0x00345254 && level_path.get_extension() == "trc") {
+		format = TR5_PC;
+	} else {
+		return level_data;
+	}
+
+	if (format == TR4_PC || format == TR5_PC) {
+		uint16_t num_room_textiles = level_file->get_u16();
+		uint16_t num_obj_textiles = level_file->get_u16();
+		uint16_t num_bump_textiles = level_file->get_u16();
+
+		uint32_t total_textiles = num_room_textiles + num_obj_textiles + num_bump_textiles;
+
+		// 32-Bit
+		uint32_t textiles32_decompressed_size = level_file->get_u32();
+		uint32_t textiles32_compressed_size = level_file->get_u32();
+
+		PackedByteArray textiles32_compressed_buffer = level_file->get_buffer(textiles32_compressed_size);
+		PackedByteArray textiles32_decompressed_buffer;
+		textiles32_decompressed_buffer.resize(textiles32_decompressed_size);
+
+		Compression compression_32;
+		compression_32.decompress(textiles32_decompressed_buffer.ptrw(), textiles32_decompressed_size, textiles32_compressed_buffer.ptr(), textiles32_compressed_size, Compression::MODE_DEFLATE);
+
+		// 16-Bit
+		uint32_t textiles16_decompressed_size = level_file->get_u32();
+		uint32_t textiles16_compressed_size = level_file->get_u32();
+
+		PackedByteArray textiles16_compressed_buffer = level_file->get_buffer(textiles16_compressed_size);
+		PackedByteArray textiles16_decompressed_buffer;
+		textiles16_decompressed_buffer.resize(textiles16_decompressed_size);
+
+		Compression compression_16;
+		compression_16.decompress(textiles16_decompressed_buffer.ptrw(), textiles16_decompressed_size, textiles16_compressed_buffer.ptr(), textiles16_compressed_size, Compression::MODE_DEFLATE);
+
+
+		Ref<TRFileAccess> uncompressed_file_access = TRFileAccess::create_from_buffer(textiles32_decompressed_buffer);
+		Vector<PackedByteArray> level_textures = read_tr_texture_pages_32(uncompressed_file_access, num_room_textiles);
+		Vector<PackedByteArray> entity_textures = read_tr_texture_pages_32(uncompressed_file_access, num_obj_textiles);
+		Vector<PackedByteArray> bump_textures_32 = read_tr_texture_pages_32(uncompressed_file_access, num_bump_textiles);
+		level_data->texture_type = TR_TEXTURE_TYPE_32;
+
+		// Font and Sky
+		uint32_t font_and_sky_decompressed_size = level_file->get_u32();
+		uint32_t font_and_sky_compressed_size = level_file->get_u32();
+
+		PackedByteArray font_and_sky_compressed_buffer = level_file->get_buffer(font_and_sky_compressed_size);
+		PackedByteArray font_and_sky_decompressed_buffer;
+		font_and_sky_decompressed_buffer.resize(font_and_sky_decompressed_size);
+
+		Compression font_and_sky_compression;
+		font_and_sky_compression.decompress(font_and_sky_decompressed_buffer.ptrw(), font_and_sky_decompressed_size, font_and_sky_compressed_buffer.ptr(), font_and_sky_compressed_size, Compression::MODE_DEFLATE);
+
+		level_data->level_textures = level_textures;
+		level_data->entity_textures = entity_textures;
+
+		// Other
+		if (format == TR4_PC) {
+			uint32_t other_decompressed_size = level_file->get_u32();
+			uint32_t other_compressed_size = level_file->get_u32();
+
+			PackedByteArray other_compressed_buffer = level_file->get_buffer(other_compressed_size);
+
+			PackedByteArray other_decompressed_buffer;
+			other_decompressed_buffer.resize(other_decompressed_size);
+
+			Compression other_compression;
+			other_compression.decompress(other_decompressed_buffer.ptrw(), other_decompressed_size, other_compressed_buffer.ptr(), other_compressed_size, Compression::MODE_DEFLATE);
+
+			level_data = load_level_data(TRFileAccess::create_from_buffer(other_decompressed_buffer), level_data, format, auxiliary_animation_file);
+		} else {
+			uint16_t lara_type = level_file->get_u16();
+			uint16_t weather_type = level_file->get_u16();
+
+			level_file->seek(level_file->get_position() + 28);
+
+			uint32_t other_decompressed_size = level_file->get_u32();
+			uint32_t other_compressed_size = level_file->get_u32();
+
+			level_data = load_level_data(level_file, level_data, format, auxiliary_animation_file);
+
+		}
+	} else {
+		level_data = load_level_data(level_file, level_data, format, auxiliary_animation_file);
+	}
+
+	level_data->format = format;
+	level_data->is_using_auxiliary_animation = auxiliary_animation_file.is_valid();
 
 	return level_data;
 }

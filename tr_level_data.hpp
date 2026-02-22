@@ -20,6 +20,7 @@ class TRLevelData : public Resource {
 	GDCLASS(TRLevelData, Resource);
 public:
 	TRLevelFormat format;
+	bool is_using_auxiliary_animation;
 	TRTextureType texture_type;
 	Vector<PackedByteArray> level_textures;
 	Vector<PackedByteArray> entity_textures;

@@ -16,11 +16,11 @@ using namespace godot;
 #endif
 
 enum TRLevelFormat {
-	TR_VERSION_UNKNOWN,
 	TR1_PC,
 	TR2_PC,
 	TR3_PC,
 	TR4_PC,
+	TR5_PC,
 };
 
 #include "tr_names.hpp"
@@ -47,5 +47,9 @@ public:
 
 	void clear_level();
 	void load_level(bool p_lara_only);
-	Ref<TRLevelData> load_level_type(String file_path);
+	Ref<TRLevelData> load_level_data(Ref<TRFileAccess> level_file,
+		Ref<TRLevelData> level_data,
+		TRLevelFormat format,
+		Ref<TRFileAccess> auxiliary_animation_file);
+	Ref<TRLevelData> load_level_type();
 };

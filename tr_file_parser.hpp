@@ -7,10 +7,6 @@
 
 #include "tr_module_extension_abstraction_layer.hpp"
 
-#ifdef IS_MODULE
-using namespace godot;
-#endif
-
 class TRFileAccess : public RefCounted {
 	Ref<StreamPeerBuffer> stream_peer_buffer;
 
@@ -93,8 +89,7 @@ public:
 
 	String get_fixed_string(uint64_t p_length) {
 		PackedByteArray buffer = get_buffer(p_length);
-		String string;
-		string.parse_utf8((const char*)buffer.ptr(), buffer.size());
+		String string = String::utf8((const char *)buffer.ptr(), buffer.size());
 
 		return string;
 	}
@@ -111,5 +106,9 @@ public:
 	static Ref<TRFileAccess> create_from_buffer(const PackedByteArray p_pba) {
 		Ref<TRFileAccess> tr_file_access = memnew(TRFileAccess(p_pba));
 		return tr_file_access;
+	}
+
+	static bool exists(const String& p_path) {
+		return FileAccess::exists(p_path);
 	}
 };

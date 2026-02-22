@@ -1,5 +1,31 @@
 #include "tr_misc.hpp"
 
+bool is_lara_compatible_humanoid(uint32_t p_type_info_id, TRLevelFormat p_level_format) {
+	switch (p_level_format) {
+	case TR1_PC:
+		if ((p_type_info_id >= 0 && p_type_info_id <= 6))
+			return true;
+		break;
+	case TR2_PC:
+		if (p_type_info_id == 0 || p_type_info_id == 1 || (p_type_info_id >= 3 && p_type_info_id <= 12)) {
+			return true;
+		}
+		break;
+	case TR3_PC:
+		if (p_type_info_id == 0 || p_type_info_id == 1 || (p_type_info_id >= 3 && p_type_info_id <= 13) || p_type_info_id == 315) {
+			return true;
+		}
+		break;
+	case TR4_PC:
+		if ((p_type_info_id >= 0 && p_type_info_id <= 29) || p_type_info_id == 33) {
+			return true;
+		}
+		break;
+	}
+
+	return false;
+}
+
 Ref<AnimationNodeBlendTree> create_lara_root_animation_node(Ref<AnimationNodeStateMachine> p_state_machine) {
 	Ref<AnimationNodeBlendTree> blend_tree = memnew(AnimationNodeBlendTree);
 
@@ -46,9 +72,15 @@ Ref<AnimationNodeBlendTree> create_lara_root_animation_node(Ref<AnimationNodeSta
 	final_blend_node->set_filter_path(NodePath("%GeneralSkeleton:RightLowerArm"), true);
 	final_blend_node->set_filter_path(NodePath("%GeneralSkeleton:RightHand"), true);
 
+	// TimeScale
+	Ref<AnimationNodeTimeScale> timescale_node = memnew(AnimationNodeTimeScale);
+	blend_tree->add_node("TimeScale", timescale_node);
+	blend_tree->set_node_position("TimeScale", Vector2(780, -60));
+	blend_tree->connect_node("TimeScale", 0, "FinalBlending");
+
 	// Output
-	blend_tree->set_node_position("output", Vector2(780, -60));
-	blend_tree->connect_node("output", 0, "FinalBlending");
+	blend_tree->set_node_position("output", Vector2(980, -60));
+	blend_tree->connect_node("output", 0, "TimeScale");
 
 	return blend_tree;
 }

@@ -11,7 +11,9 @@ void gdextension_initialize(ModuleInitializationLevel p_level) {
 		ClassDB::register_class<TRLevel>();
 		ClassDB::register_class<TRLevelData>();
 
+#ifdef TR_LIB_EXTERNAL_PLUGIN
 		EditorPlugins::add_by_type<TRLevelEditorPlugin>();
+#endif
 	}
 }
 

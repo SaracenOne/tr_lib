@@ -59,13 +59,13 @@ struct TRRoomVertex {
 
 struct TRFaceTriangle {
 	int16_t indices[3];
-	int16_t tex_info_id;
+	uint16_t tex_info_id;
 	int16_t effect_info;
 };
 
 struct TRFaceQuad {
 	int16_t indices[4];
-	int16_t tex_info_id;
+	uint16_t tex_info_id;
 	int16_t effect_info;
 };
 
@@ -100,15 +100,12 @@ struct TRRoomSector {
 struct TRRoomLight {
 	TRPos pos;
 
-	TRColor3 color;
+	Color color;
+	real_t energy;
+	real_t range;
+	real_t attenuation;
 
 	uint8_t light_type;
-
-	uint32_t intensity;
-	uint32_t intensity_alt;
-	
-	uint32_t fade;
-	uint32_t fade_alt;
 };
 
 struct TRRoomStaticMesh {
@@ -122,11 +119,12 @@ struct TRRoomStaticMesh {
 struct TRRoomPortal {
 	uint16_t adjoining_room;
 	TRVertex normal;
-	TRVertex vertices[4];
+	TRPos vertices[4];
 };
 
 struct TRRoomInfo {
 	int32_t x;
+	int32_t y;
 	int32_t z;
 	int32_t y_bottom;
 	int32_t y_top;
@@ -246,12 +244,6 @@ struct TRTextureInfo {
 	uint32_t height;
 };
 
-struct tr_face4
-{
-	uint16_t verticies[4];
-	uint16_t texture;
-};
-
 struct TRMesh {
 	TRVertex center;
 	int32_t collision_radius;
@@ -299,6 +291,16 @@ struct TRTypes {
 
 	HashMap<int, TRMoveableInfo > moveable_info_map;
 	HashMap<int, TRStaticInfo> static_info_map;
+};
+
+struct TRReAtlasTextureInfo {
+	uint32_t image_idx;
+	real_t uv[4];
+};
+
+struct TRReAtlasResult {
+	Vector<Ref<Image>> images;
+	HashMap<int, TRReAtlasTextureInfo> infos;
 };
 
 enum TRBoneBits {

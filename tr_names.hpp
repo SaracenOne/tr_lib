@@ -1,9 +1,9 @@
 #pragma once
-#include "tr_misc.hpp"
 #include "tr_level.hpp"
 #include "tr_level_data.hpp"
+#include "tr_names.hpp"
 
-static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_level_format) {
+static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_level_format, bool p_using_auxiliary_animation) {
 	switch(p_animation_id) {
 		case 0:
 			return "run";
@@ -34,9 +34,17 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 13:
 			return "turn_left_slow";
 		case 14:
-			return "jump_forward_land_start_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "underwater_swim_to_still_huddle";
+			} else {
+				return "jump_forward_land_start_unused";
+			}
 		case 15:
-			return "jump_forward_land_end_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "underwater_swim_to_still_sprawl";
+			} else {
+				return "jump_forward_land_end_unused";
+			}
 		case 16:
 			return "run_jump_right_start";
 		case 17:
@@ -64,7 +72,11 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 28:
 			return "jump_up";
 		case 29:
-			return "jump_up_to_hang_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "underwater_swim_to_still_medium";
+			} else {
+				return "jump_up_to_hang_unused";
+			}
 		case 30:
 			return "jump_to_freefall";
 		case 31:
@@ -92,19 +104,40 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 42:
 			return "climb_3click";
 		case 43:
-			return "climb_3click_end_to_run_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "jump_forwards_roll_start";
+			} else {
+				return "climb_3click_end_to_run_unused";
+			}
 		case 44:
 			return "turn_right";
 		case 45:
 			return "jump_forward_to_freefall_continue";
 		case 46:
-			return "reach_to_freefall_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "drop_and_grab_ledge";
+			} else {
+				return "reach_to_freefall_unused";
+			}
 		case 47:
-			return "roll_alternate_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "jump_forwards_roll_end";
+			} else {
+				return "roll_alternate_unused";
+			}
 		case 48:
-			return "roll_end_alternate_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "jump_back_roll_start";
+			} else {
+				return "roll_end_alternate_unused";
+			}
 		case 49:
-			return "jump_forward_end_to_freefall_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "jump_back_roll_end";
+			}
+			else {
+				return "jump_forward_end_to_freefall_unused";
+			}
 		case 50:
 			return "climb_2click";
 		case 51:
@@ -236,7 +269,12 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 114:
 			return "underwater_to_on_water";
 		case 115:
-			return "on_water_swim_forwards_dive_unused";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "climb_on_handstand_alt";
+			}
+			else {
+				return "on_water_swim_forwards_dive_unused";
+			}
 		case 116:
 			return "on_water_swim_forwards";
 		case 117:
@@ -326,9 +364,17 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 159:
 			return "climb_on_handstand";
 		case 160:
-			return "stand_to_ladder";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "animation_160";
+			} else {
+				return "stand_to_ladder";
+			}
 		case 161:
-			return "ladder_up";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "drop_and_grab_ledge_fast";
+			} else {
+				return "ladder_up";
+			}
 		case 162:
 			return "ladder_up_stop_right";
 		case 163:
@@ -654,7 +700,7 @@ static String get_lara_animation_name(size_t p_animation_id, TRLevelFormat p_lev
 		case 315:
 			return "door_kick";
 		case 316:
-			return "giant_button_psuh";
+			return "giant_button_push";
 		case 317:
 			return "floor_trapdoor_open";
 		case 318:
@@ -1052,16 +1098,16 @@ static String get_bone_name(uint32_t p_type_info_id, uint32_t p_bone_id, TRLevel
 	}
 }
 
-static String get_animation_name(uint32_t p_type_info_id, uint32_t p_animation_id, TRLevelFormat p_level_format) {
+static String get_animation_name(uint32_t p_type_info_id, uint32_t p_animation_id, TRLevelFormat p_level_format, bool p_using_auxiliary_animation) {
 	switch (p_level_format) {
 		case TRLevelFormat::TR1_PC:
-			return get_tr1_animation_name(p_type_info_id, p_animation_id);
+			return get_tr1_animation_name(p_type_info_id, p_animation_id, p_using_auxiliary_animation);
 		case TRLevelFormat::TR2_PC:
-			return get_tr2_animation_name(p_type_info_id, p_animation_id);
+			return get_tr2_animation_name(p_type_info_id, p_animation_id, p_using_auxiliary_animation);
 		case TRLevelFormat::TR3_PC:
-			return get_tr3_animation_name(p_type_info_id, p_animation_id);
+			return get_tr3_animation_name(p_type_info_id, p_animation_id, p_using_auxiliary_animation);
 		case TRLevelFormat::TR4_PC:
-			return get_tr4_animation_name(p_type_info_id, p_animation_id);
+			return get_tr4_animation_name(p_type_info_id, p_animation_id, p_using_auxiliary_animation);
 		default:
 			return String("animation_") + itos(p_animation_id);
 	}
@@ -1071,7 +1117,7 @@ static String get_default_state_name(uint32_t p_state_id) {
 	return String("state_") + itos(p_state_id);
 }
 
-static String get_lara_state_name(uint32_t p_state_id) {
+static String get_lara_state_name(uint32_t p_state_id, TRLevelFormat p_level_format, bool p_using_auxiliary_animation) {
 	switch (p_state_id) {
 		case 0:
 			return "WalkForwards";
@@ -1186,9 +1232,17 @@ static String get_lara_state_name(uint32_t p_state_id) {
 		case 55:
 			return "OnWaterExit";
 		case 56:
-			return "OnLadderIdle";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "HandstandAlt";
+			} else {
+				return "OnLadderIdle";
+			}
 		case 57:
-			return "OnLadderUp";
+			if (p_level_format == TR1_PC && p_using_auxiliary_animation) {
+				return "SwanDiveRoll";
+			} else {
+				return "OnLadderUp";
+			}
 		case 58:
 			return "OnLadderLeft";
 		case 59:
@@ -1316,13 +1370,14 @@ static String get_lara_state_name(uint32_t p_state_id) {
 	}
 }
 
-static String get_state_name(uint32_t p_type_info_id, uint32_t p_state_id, TRLevelFormat p_level_format) {
+static String get_state_name(uint32_t p_type_info_id, uint32_t p_state_id, TRLevelFormat p_level_format, bool p_using_auxiliary_animation) {
 	switch (p_type_info_id) {
 		case 0:
-			return get_lara_state_name(p_state_id);
+			return get_lara_state_name(p_state_id, p_level_format, p_using_auxiliary_animation);
 			break;
 		default:
 			return get_default_state_name(p_state_id);
 			break;
 	}
 }
+
